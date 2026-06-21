@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reservar turno</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--accent:#6366f1;--text:#e2e8f0;--muted:#94a3b8;--green:#10b981;--red:#ef4444}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+  .container{width:100%;max-width:480px}
+  .header{text-align:center;margin-bottom:28px}
+  .header h1{font-size:1.6rem;font-weight:700;background:linear-gradient(135deg,var(--accent),#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+  .header p{color:var(--muted);font-size:.9rem}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:16px}
+  .step{display:none}.step.active{display:block}
+  .step-header{margin-bottom:20px}
+  .step-header h2{font-size:1.1rem;font-weight:600;margin-bottom:4px}
+  .step-header p{color:var(--muted);font-size:.85rem}
+  .form-group{margin-bottom:14px}
+  label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:5px}
+  input,select{width:100%;background:#0f172a;border:1px solid var(--border);color:var(--text);padding:11px 14px;border-radius:8px;font-size:.9rem;outline:none;transition:border-color .2s}
+  input:focus,select:focus{border-color:var(--accent)}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border:none;border-radius:10px;font-size:.95rem;font-weight:600;cursor:pointer;transition:all .2s}
+  .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#4f46e5}
+  .btn-secondary{background:var(--border);color:var(--text);margin-top:8px}.btn-secondary:hover{background:#475569}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .alert{padding:12px 16px;border-radius:8px;font-size:.875rem;margin-bottom:14px}
+  .alert-success{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:var(--green)}
+  .alert-error{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--red)}
+  .slot-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+  .slot{padding:10px;border:1px solid var(--border);border-radius:8px;text-align:center;cursor:pointer;font-size:.85rem;transition:all .2s;background:#0f172a}
+  .slot:hover{border-color:var(--accent);color:var(--accent)}
+  .slot.selected{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .prof-cards{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+  .prof-card{padding:14px;border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:all .2s;background:#0f172a}
+  .prof-card:hover,.prof-card.selected{border-color:var(--accent);background:rgba(99,102,241,.1)}
+  .prof-card h3{font-size:.95rem;margin-bottom:2px}
+  .prof-card p{font-size:.8rem;color:var(--muted)}
+  .srv-cards{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  .srv-card{padding:12px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s;background:#0f172a;display:flex;justify-content:space-between;align-items:center}
+  .srv-card:hover,.srv-card.selected{border-color:var(--accent);background:rgba(99,102,241,.1)}
+  .srv-card .srv-name{font-size:.9rem}
+  .srv-card .srv-info{font-size:.8rem;color:var(--muted)}
+  .progress{display:flex;gap:6px;margin-bottom:20px}
+  .progress-dot{flex:1;height:3px;border-radius:2px;background:var(--border);transition:.3s}
+  .progress-dot.done{background:var(--accent)}
+  .resumen{background:#0f172a;border-radius:8px;padding:14px;margin-bottom:16px}
+  .resumen-row{display:flex;justify-content:space-between;padding:5px 0;font-size:.875rem;border-bottom:1px solid rgba(51,65,85,.4)}
+  .resumen-row:last-child{border-bottom:none;font-weight:600}
+  .resumen-row span:first-child{color:var(--muted)}
+  .success-icon{font-size:3rem;text-align:center;margin-bottom:12px}
+  .text-center{text-align:center}
+  .loading{text-align:center;padding:20px;color:var(--muted)}
+  .text-muted{color:var(--muted);font-size:.8rem}
+  @media(max-width:400px){.slot-grid{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1 id="negocio-nombre">TurnosApp</h1>
+    <p id="negocio-subtitulo">Cargando...</p>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress" id="progress-bar"></div>
+
+  <!-- STEP 1: DNI -->
+  <div class="card step active" id="step-1">
+    <div class="step-header">
+      <h2>👤 Identificación</h2>
+      <p>Ingresá tu DNI para continuar</p>
+    </div>
+    <div class="form-group">
+      <label>DNI *</label>
+      <input type="text" id="input-dni" placeholder="12345678" inputmode="numeric" maxlength="10" />
+    </div>
+    <div id="step1-msg" style="display:none" class="alert"></div>
+    <button class="btn btn-primary" onclick="buscarDni()">Continuar →</button>
+  </div>
+
+  <!-- STEP 2: DATOS -->
+  <div class="card step" id="step-2">
+    <div class="step-header">
+      <h2>📝 Tus datos</h2>
+      <p>Completá o confirmá tus datos de contacto</p>
+    </div>
+    <div class="form-group"><label>Nombre *</label><input type="text" id="input-nombre" /></div>
+    <div class="form-group"><label>Apellido *</label><input type="text" id="input-apellido" /></div>
+    <div class="form-group"><label>Teléfono (WhatsApp) *</label><input type="text" id="input-tel" placeholder="549XXXXXXXXXX" /></div>
+    <div class="form-group"><label>Email</label><input type="email" id="input-email" /></div>
+    <div id="step2-msg" style="display:none" class="alert"></div>
+    <button class="btn btn-primary" onclick="goStep3()">Continuar →</button>
+    <button class="btn btn-secondary" onclick="goStep(1)">← Atrás</button>
+  </div>
+
+  <!-- STEP 3: PROFESIONAL (solo multi) -->
+  <div class="card step" id="step-3" style="display:none">
+    <div class="step-header">
+      <h2>👨‍⚕️ Elegí tu profesional</h2>
+    </div>
+    <div class="prof-cards" id="lista-profesionales"></div>
+    <div id="step3-msg" style="display:none" class="alert alert-error"></div>
+    <button class="btn btn-secondary" onclick="goStep(2)" style="margin-top:12px">← Atrás</button>
+  </div>
+
+  <!-- STEP 4: SERVICIO -->
+  <div class="card step" id="step-4">
+    <div class="step-header">
+      <h2>⚙️ Elegí el servicio</h2>
+    </div>
+    <div class="srv-cards" id="lista-servicios"></div>
+    <div id="step4-msg" style="display:none" class="alert alert-error"></div>
+    <button class="btn btn-secondary" onclick="goStepAtrasServicio()" style="margin-top:12px">← Atrás</button>
+  </div>
+
+  <!-- STEP 5: FECHA Y HORA -->
+  <div class="card step" id="step-5">
+    <div class="step-header">
+      <h2>📅 Elegí fecha y hora</h2>
+    </div>
+    <div class="form-group">
+      <label>Fecha</label>
+      <input type="date" id="input-fecha" onchange="loadSlots()" />
+    </div>
+    <div id="slots-container">
+      <p class="text-muted">Seleccioná una fecha para ver horarios disponibles.</p>
+    </div>
+    <div id="step5-msg" style="display:none" class="alert alert-error"></div>
+    <button class="btn btn-secondary" onclick="goStep(esMulti?3:4)" style="margin-top:12px">← Atrás</button>
+  </div>
+
+  <!-- STEP 6: CONFIRMAR -->
+  <div class="card step" id="step-6">
+    <div class="step-header">
+      <h2>✅ Confirmá tu turno</h2>
+    </div>
+    <div class="resumen" id="resumen"></div>
+    <div id="step6-msg" style="display:none" class="alert"></div>
+    <button class="btn btn-primary" onclick="confirmarTurno()" id="btn-confirmar">Confirmar turno</button>
+    <button class="btn btn-secondary" onclick="goStep(5)">← Atrás</button>
+  </div>
+
+  <!-- STEP 7: ÉXITO -->
+  <div class="card step" id="step-7">
+    <div class="success-icon">🎉</div>
+    <div class="text-center">
+      <h2 style="margin-bottom:8px">¡Turno reservado!</h2>
+      <p class="text-muted" style="margin-bottom:20px">Te enviamos la confirmación por WhatsApp.</p>
+      <div class="resumen" id="resumen-ok"></div>
+      <button class="btn btn-primary" onclick="reiniciar()" style="margin-top:16px">Reservar otro turno</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const slug = location.pathname.replace('/reservar/', '').replace(/\//g,'').split('?')[0];
+let negocio = null, esMulti = false;
+let clienteExistente = null;
+let profSeleccionado = null, srvSeleccionado = null, horaSeleccionada = null;
+let currentStep = 1;
+const TOTAL_STEPS = 6;
+
+async function api(path) {
+  const r = await fetch('/api/booking' + path);
+  if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Error'); }
+  return r.json();
+}
+
+async function init() {
+  try {
+    negocio = await api('/negocio/' + slug);
+    esMulti = negocio.tipo === 'multi';
+    document.getElementById('negocio-nombre').textContent = negocio.nombre;
+    document.getElementById('negocio-subtitulo').textContent = 'Reservá tu turno en línea';
+    document.title = negocio.nombre + ' - Turnos';
+    // Fecha mínima = hoy
+    document.getElementById('input-fecha').min = new Date().toISOString().split('T')[0];
+    updateProgress(1);
+  } catch(e) {
+    document.getElementById('negocio-nombre').textContent = 'Negocio no encontrado';
+    document.getElementById('negocio-subtitulo').textContent = e.message;
+  }
+}
+
+function updateProgress(step) {
+  const pb = document.getElementById('progress-bar');
+  pb.innerHTML = Array.from({length: TOTAL_STEPS}, (_,i) =>
+    `<div class="progress-dot ${i < step ? 'done' : ''}"></div>`
+  ).join('');
+}
+
+function showStep(n) {
+  document.querySelectorAll('.step').forEach(s => { s.classList.remove('active'); s.style.display=''; });
+  // Para step-3 (profesional, solo multi), si no es multi se salta
+  const el = document.getElementById('step-'+n);
+  if (!el) return;
+  // Si step-3 y no multi: no mostrar
+  if (n === 3 && !esMulti) { el.style.display = 'none'; return; }
+  el.classList.add('active');
+  el.style.display = 'block';
+  currentStep = n;
+  updateProgress(n);
+  window.scrollTo(0, 0);
+}
+
+function goStep(n) { showStep(n); }
+
+async function buscarDni() {
+  const dni = document.getElementById('input-dni').value.trim();
+  if (!dni) return showMsg('step1', 'Ingresá tu DNI', 'error');
+  try {
+    clienteExistente = await api('/cliente/' + slug + '/' + dni);
+    document.getElementById('input-nombre').value = clienteExistente.nombre;
+    document.getElementById('input-apellido').value = clienteExistente.apellido;
+    document.getElementById('input-tel').value = clienteExistente.telefono;
+    document.getElementById('input-email').value = clienteExistente.email || '';
+    showMsg('step1', '✅ Cliente encontrado. Confirmá tus datos.', 'success');
+    setTimeout(() => goStep(2), 800);
+  } catch {
+    clienteExistente = null;
+    document.getElementById('input-nombre').value = '';
+    document.getElementById('input-apellido').value = '';
+    document.getElementById('input-tel').value = '549';
+    document.getElementById('input-email').value = '';
+    goStep(2);
+  }
+}
+
+function goStep3() {
+  const n = document.getElementById('input-nombre').value.trim();
+  const a = document.getElementById('input-apellido').value.trim();
+  const t = document.getElementById('input-tel').value.trim();
+  if (!n || !a || !t) return showMsg('step2', 'Completá nombre, apellido y teléfono', 'error');
+  if (esMulti) { loadProfesionales(); goStep(3); }
+  else { loadServicios(null); goStep(4); }
+}
+
+async function loadProfesionales() {
+  try {
+    const profs = await api('/profesionales/' + slug);
+    const c = document.getElementById('lista-profesionales');
+    if (!profs.length) { c.innerHTML = '<p class="text-muted">No hay profesionales disponibles.</p>'; return; }
+    c.innerHTML = profs.map(p => `
+      <div class="prof-card" onclick="seleccionarProf(${p.id},'${p.nombre.replace(/'/g,"\\'")}','${(p.especialidad||'').replace(/'/g,"\\'")}')">
+        <h3>${p.nombre}</h3>
+        <p>${p.especialidad || ''}${p.descripcion ? ' · '+p.descripcion : ''}</p>
+      </div>
+    `).join('');
+  } catch(e) { document.getElementById('lista-profesionales').innerHTML = '<p class="text-muted">Error cargando profesionales.</p>'; }
+}
+
+function seleccionarProf(id, nombre, especialidad) {
+  profSeleccionado = { id, nombre, especialidad };
+  document.querySelectorAll('.prof-card').forEach(c => c.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  setTimeout(() => { loadServicios(id); goStep(4); }, 300);
+}
+
+async function loadServicios(profId) {
+  try {
+    let url = '/servicios/' + slug;
+    if (profId) url += '?profesional_id=' + profId;
+    const srvs = await api(url);
+    const c = document.getElementById('lista-servicios');
+    if (!srvs.length) { c.innerHTML = '<p class="text-muted">No hay servicios disponibles.</p>'; return; }
+    c.innerHTML = srvs.map(s => `
+      <div class="srv-card" onclick="seleccionarSrv(${s.id},'${s.nombre.replace(/'/g,"\\'")}',${s.duracion_minutos},${s.precio})">
+        <span class="srv-name">${s.nombre}</span>
+        <span class="srv-info">${s.duracion_minutos}min${s.precio>0?' · $'+s.precio:''}</span>
+      </div>
+    `).join('');
+  } catch { document.getElementById('lista-servicios').innerHTML = '<p class="text-muted">Error cargando servicios.</p>'; }
+}
+
+function seleccionarSrv(id, nombre, duracion, precio) {
+  srvSeleccionado = { id, nombre, duracion, precio };
+  document.querySelectorAll('.srv-card').forEach(c => c.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  setTimeout(() => goStep(5), 300);
+}
+
+function goStepAtrasServicio() {
+  if (esMulti) goStep(3); else goStep(2);
+}
+
+async function loadSlots() {
+  const fecha = document.getElementById('input-fecha').value;
+  if (!fecha) return;
+  const c = document.getElementById('slots-container');
+  c.innerHTML = '<p class="loading">Cargando horarios...</p>';
+  horaSeleccionada = null;
+  try {
+    let url = `/horarios/${slug}?fecha=${fecha}`;
+    if (profSeleccionado?.id) url += `&profesional_id=${profSeleccionado.id}`;
+    const slots = await api(url);
+    if (!slots.length) { c.innerHTML = '<p class="text-muted" style="margin-top:8px">No hay horarios disponibles para este día.</p>'; return; }
+    c.innerHTML = `<div class="slot-grid">${slots.map(s => `<div class="slot" onclick="selSlot('${s}',this)">${s}</div>`).join('')}</div>`;
+  } catch(e) { c.innerHTML = `<p class="text-muted">Error: ${e.message}</p>`; }
+}
+
+function selSlot(hora, el) {
+  horaSeleccionada = hora;
+  document.querySelectorAll('.slot').forEach(s => s.classList.remove('selected'));
+  el.classList.add('selected');
+  // Mostrar botón de continuar
+  const existing = document.getElementById('btn-slot-next');
+  if (!existing) {
+    const btn = document.createElement('button');
+    btn.id = 'btn-slot-next';
+    btn.className = 'btn btn-primary';
+    btn.style.marginTop = '14px';
+    btn.textContent = 'Continuar →';
+    btn.onclick = goStep6;
+    document.getElementById('step-5').appendChild(btn);
+  }
+}
+
+function goStep6() {
+  if (!document.getElementById('input-fecha').value) return showMsg('step5', 'Seleccioná una fecha', 'error');
+  if (!horaSeleccionada) return showMsg('step5', 'Seleccioná un horario', 'error');
+  const fecha = document.getElementById('input-fecha').value;
+  const [y,m,d] = fecha.split('-');
+  const resumen = document.getElementById('resumen');
+  const rows = [
+    ['Nombre', document.getElementById('input-nombre').value + ' ' + document.getElementById('input-apellido').value],
+    ['Teléfono', document.getElementById('input-tel').value],
+  ];
+  if (esMulti && profSeleccionado) rows.push(['Profesional', profSeleccionado.nombre]);
+  if (srvSeleccionado) rows.push(['Servicio', srvSeleccionado.nombre + ' (' + srvSeleccionado.duracion + ' min)']);
+  rows.push(['Fecha', `${d}/${m}/${y}`]);
+  rows.push(['Hora', horaSeleccionada]);
+  if (srvSeleccionado?.precio > 0) rows.push(['Precio', '$' + srvSeleccionado.precio]);
+  resumen.innerHTML = rows.map(([k,v]) => `<div class="resumen-row"><span>${k}</span><span>${v}</span></div>`).join('');
+  goStep(6);
+}
+
+async function confirmarTurno() {
+  const btn = document.getElementById('btn-confirmar');
+  btn.disabled = true; btn.textContent = 'Confirmando...';
+  const body = {
+    profesional_id: profSeleccionado?.id || null,
+    servicio_id: srvSeleccionado?.id || null,
+    cliente_dni: document.getElementById('input-dni').value.trim(),
+    cliente_nombre: document.getElementById('input-nombre').value.trim(),
+    cliente_apellido: document.getElementById('input-apellido').value.trim(),
+    cliente_telefono: document.getElementById('input-tel').value.trim(),
+    cliente_email: document.getElementById('input-email').value.trim(),
+    fecha: document.getElementById('input-fecha').value,
+    hora: horaSeleccionada
+  };
+  try {
+    await fetch('/api/booking/turno/' + slug, {
+      method: 'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    }).then(async r => {
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+    });
+    // Mostrar resumen en pantalla de éxito
+    document.getElementById('resumen-ok').innerHTML = document.getElementById('resumen').innerHTML;
+    goStep(7);
+  } catch(e) {
+    showMsg('step6', e.message, 'error');
+    btn.disabled = false; btn.textContent = 'Confirmar turno';
+  }
+}
+
+function reiniciar() {
+  profSeleccionado = null; srvSeleccionado = null; horaSeleccionada = null; clienteExistente = null;
+  document.getElementById('input-dni').value = '';
+  document.getElementById('input-nombre').value = '';
+  document.getElementById('input-apellido').value = '';
+  document.getElementById('input-tel').value = '549';
+  document.getElementById('input-email').value = '';
+  document.getElementById('input-fecha').value = '';
+  document.getElementById('slots-container').innerHTML = '<p class="text-muted">Seleccioná una fecha para ver horarios disponibles.</p>';
+  const btnNext = document.getElementById('btn-slot-next');
+  if (btnNext) btnNext.remove();
+  goStep(1);
+}
+
+function showMsg(stepId, msg, type) {
+  const el = document.getElementById(stepId+'-msg');
+  if (!el) return;
+  el.className = 'alert alert-' + type;
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display='none', 4000);
+}
+
+document.getElementById('input-dni').addEventListener('keydown', e => { if(e.key==='Enter') buscarDni(); });
+init();
+</script>
+</body>
+</html>

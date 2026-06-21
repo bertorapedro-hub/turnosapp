@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TurnosApp - Superadmin</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--accent:#6366f1;--accent2:#8b5cf6;--text:#e2e8f0;--muted:#94a3b8;--green:#10b981;--red:#ef4444;--yellow:#f59e0b;--blue:#3b82f6}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column}
+  #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh}
+  .login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:40px;width:360px;text-align:center}
+  .login-card h1{font-size:1.8rem;margin-bottom:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .login-card p{color:var(--muted);margin-bottom:28px;font-size:.9rem}
+  input,select,textarea{width:100%;background:#0f172a;border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:.9rem;outline:none;transition:border-color .2s}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+  .form-group{margin-bottom:14px;text-align:left}
+  label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:5px}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:8px;font-size:.875rem;font-weight:500;cursor:pointer;transition:all .2s;text-decoration:none}
+  .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#4f46e5}
+  .btn-success{background:var(--green);color:#fff}.btn-success:hover{opacity:.85}
+  .btn-danger{background:var(--red);color:#fff}.btn-danger:hover{opacity:.85}
+  .btn-warning{background:var(--yellow);color:#000}.btn-warning:hover{opacity:.85}
+  .btn-secondary{background:var(--border);color:var(--text)}.btn-secondary:hover{background:#475569}
+  .btn-sm{padding:5px 11px;font-size:.8rem}
+  .btn-block{width:100%;justify-content:center;margin-top:6px}
+  #app{display:none;flex:1}
+  .sidebar{width:220px;background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:100vh;position:fixed;top:0;left:0}
+  .sidebar-logo{padding:20px 16px;border-bottom:1px solid var(--border)}
+  .sidebar-logo h2{font-size:1.1rem;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .sidebar-logo small{color:var(--muted);font-size:.75rem}
+  .nav-items{padding:12px 8px;flex:1}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:.875rem;margin-bottom:2px;transition:all .2s}
+  .nav-item:hover,.nav-item.active{background:rgba(99,102,241,.15);color:var(--text)}
+  .nav-item.active{color:var(--accent)}
+  .sidebar-footer{padding:12px 8px;border-top:1px solid var(--border)}
+  .main{margin-left:220px;flex:1;padding:28px}
+  .page{display:none}.page.active{display:block}
+  .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+  .page-header h1{font-size:1.5rem;font-weight:600}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+  .card-title{font-size:1rem;font-weight:600}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;padding:10px 12px;font-size:.8rem;color:var(--muted);border-bottom:1px solid var(--border)}
+  td{padding:10px 12px;font-size:.875rem;border-bottom:1px solid rgba(51,65,85,.5);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:rgba(99,102,241,.05)}
+  .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:500}
+  .badge-green{background:rgba(16,185,129,.15);color:var(--green)}
+  .badge-red{background:rgba(239,68,68,.15);color:var(--red)}
+  .badge-yellow{background:rgba(245,158,11,.15);color:var(--yellow)}
+  .badge-blue{background:rgba(59,130,246,.15);color:var(--blue)}
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center}
+  .modal-bg.open{display:flex}
+  .modal{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto}
+  .modal h2{font-size:1.2rem;margin-bottom:20px}
+  .flex{display:flex;gap:8px;align-items:center}
+  .flex-between{display:flex;justify-content:space-between;align-items:center}
+  .alert{padding:12px 16px;border-radius:8px;font-size:.875rem;margin-bottom:12px}
+  .alert-success{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:var(--green)}
+  .alert-error{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--red)}
+  .text-muted{color:var(--muted);font-size:.8rem}
+  .token-cell{display:flex;align-items:center;gap:8px}
+  .token-cell code{font-family:monospace;font-size:.78rem;color:var(--muted);background:var(--bg);padding:3px 8px;border-radius:6px;border:1px solid var(--border)}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <h1>TurnosApp</h1>
+    <p>Panel de Superadmin</p>
+    <div class="form-group">
+      <label>Usuario</label>
+      <input type="text" id="login-user" value="superadmin" />
+    </div>
+    <div class="form-group">
+      <label>Contraseña</label>
+      <input type="password" id="login-pass" value="" placeholder="Tu contraseña" />
+    </div>
+    <div id="login-error" class="alert alert-error" style="display:none"></div>
+    <button class="btn btn-primary btn-block" onclick="doLogin()">Ingresar</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none;flex:1">
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <h2>TurnosApp</h2>
+    <small>Superadmin</small>
+  </div>
+  <div class="nav-items">
+    <div class="nav-item active" data-page="negocios" onclick="showPage('negocios', event)">🏢 Negocios</div>
+    <div class="nav-item" data-page="cuenta" onclick="showPage('cuenta', event)">🔐 Mi Cuenta</div>
+  </div>
+  <div class="sidebar-footer">
+    <div class="nav-item" onclick="logout()">🚪 Salir</div>
+  </div>
+</div>
+<div class="main">
+
+<!-- NEGOCIOS -->
+<div id="page-negocios" class="page active">
+  <div class="page-header"><h1>Negocios</h1><button class="btn btn-primary" onclick="openModalNegocio()">+ Nuevo negocio</button></div>
+  <div class="card">
+    <table>
+      <thead><tr><th>Nombre</th><th>Slug</th><th>Tipo</th><th>Estado</th><th>Vencimiento</th><th>Token</th><th>Acciones</th></tr></thead>
+      <tbody id="tabla-negocios"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- CUENTA -->
+<div id="page-cuenta" class="page">
+  <div class="page-header"><h1>Mi Cuenta</h1></div>
+  <div class="card" style="max-width:400px">
+    <div class="card-title" style="margin-bottom:16px">Cambiar contraseña</div>
+    <div class="form-group"><label>Contraseña actual</label><input type="password" id="pass-actual" /></div>
+    <div class="form-group"><label>Nueva contraseña</label><input type="password" id="pass-nueva" /></div>
+    <div class="form-group"><label>Confirmar nueva</label><input type="password" id="pass-conf" /></div>
+    <div id="pass-msg" style="display:none;margin-bottom:10px"></div>
+    <button class="btn btn-primary" onclick="cambiarPass()">💾 Cambiar contraseña</button>
+  </div>
+</div>
+
+</div><!-- main -->
+</div><!-- app -->
+
+<!-- MODAL NUEVO NEGOCIO -->
+<div class="modal-bg" id="modal-negocio">
+  <div class="modal">
+    <h2>Nuevo Negocio</h2>
+    <div class="form-group"><label>Nombre *</label><input type="text" id="neg-nombre" /></div>
+    <div class="form-group"><label>Slug (URL) *</label><input type="text" id="neg-slug" placeholder="mi-negocio" /></div>
+    <div class="form-group">
+      <label>Tipo</label>
+      <select id="neg-tipo">
+        <option value="individual">Individual (1 profesional)</option>
+        <option value="multi">Multi-profesional</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Email</label><input type="email" id="neg-email" /></div>
+    <div class="form-group"><label>Teléfono (con código de país)</label><input type="text" id="neg-telefono" placeholder="549XXXXXXXXXX" /></div>
+    <div id="neg-msg" style="display:none;margin-bottom:10px"></div>
+    <div class="flex" style="justify-content:flex-end;gap:8px;margin-top:16px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-negocio')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarNegocio()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let TOKEN = '';
+let negociosCache = [];
+
+async function api(path, method='GET', body=null) {
+  const opts = { method, headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+TOKEN } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch('/api/superadmin' + path, opts);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Error');
+  return data;
+}
+
+async function doLogin() {
+  const u = document.getElementById('login-user').value;
+  const p = document.getElementById('login-pass').value;
+  try {
+    const d = await fetch('/api/superadmin/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({username:u, password:p})
+    });
+    const data = await d.json();
+    if (!d.ok) throw new Error(data.error);
+    TOKEN = data.token;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    loadNegocios();
+  } catch(e) {
+    const el = document.getElementById('login-error');
+    el.style.display = 'block'; el.textContent = e.message;
+  }
+}
+
+document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+function logout() { TOKEN=''; location.reload(); }
+
+function showPage(p, ev) {
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  (ev ? ev.currentTarget : document.querySelector(`.nav-item[data-page="${p}"]`)).classList.add('active');
+  if (p==='negocios') loadNegocios();
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function fmtFecha(f) {
+  if (!f) return '—';
+  const [y,m,d] = f.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function badgeEstado(estado) {
+  return estado === 'activo'
+    ? '<span class="badge badge-green">Activo</span>'
+    : '<span class="badge badge-red">Suspendido</span>';
+}
+
+function fechaVencimientoHtml(fecha) {
+  if (!fecha) return '<span class="text-muted">—</span>';
+  const dias = Math.floor((new Date(fecha) - new Date())/86400000);
+  const color = dias < 0 ? 'var(--red)' : (dias <= 7 ? 'var(--yellow)' : 'var(--text)');
+  return `<span style="color:${color}">${fmtFecha(fecha)}</span>`;
+}
+
+async function loadNegocios() {
+  negociosCache = await api('/negocios');
+  const tbody = document.getElementById('tabla-negocios');
+  tbody.innerHTML = negociosCache.map(n => `
+    <tr>
+      <td><strong>${n.nombre}</strong></td>
+      <td><small>${n.slug}</small></td>
+      <td><span class="badge badge-blue">${n.tipo}</span></td>
+      <td>${badgeEstado(n.estado)}</td>
+      <td>${fechaVencimientoHtml(n.fecha_vencimiento)}</td>
+      <td>
+        <div class="token-cell">
+          <code>${n.token.slice(0,10)}…</code>
+          <button class="btn btn-sm btn-secondary" id="copy-${n.id}" onclick="copiarToken(${n.id},'${n.token}')">📋</button>
+        </div>
+      </td>
+      <td>
+        <div class="flex">
+          ${n.estado === 'activo'
+            ? `<button class="btn btn-sm btn-secondary" onclick="toggleEstado(${n.id},'suspendido','${n.nombre}')">⏸ Desactivar</button>`
+            : `<button class="btn btn-sm btn-success" onclick="toggleEstado(${n.id},'activo','${n.nombre}')">▶ Activar</button>`}
+          <button class="btn btn-sm btn-warning" onclick="renovar(${n.id},'${n.nombre}')">↻ Renovar</button>
+          <button class="btn btn-sm btn-danger" onclick="eliminarNegocio(${n.id},'${n.nombre}')">🗑</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function copiarToken(id, token) {
+  const btn = document.getElementById('copy-'+id);
+  navigator.clipboard.writeText(token).then(() => {
+    const original = btn.textContent;
+    btn.textContent = '✅';
+    setTimeout(() => { btn.textContent = original; }, 1200);
+  }).catch(() => alert('No se pudo copiar. Token: ' + token));
+}
+
+function openModalNegocio() {
+  document.getElementById('neg-nombre').value = '';
+  document.getElementById('neg-slug').value = '';
+  document.getElementById('neg-tipo').value = 'individual';
+  document.getElementById('neg-email').value = '';
+  document.getElementById('neg-telefono').value = '';
+  document.getElementById('neg-msg').style.display = 'none';
+  document.getElementById('modal-negocio').classList.add('open');
+}
+
+async function guardarNegocio() {
+  const body = {
+    nombre: document.getElementById('neg-nombre').value,
+    slug: document.getElementById('neg-slug').value,
+    tipo: document.getElementById('neg-tipo').value,
+    email: document.getElementById('neg-email').value,
+    telefono: document.getElementById('neg-telefono').value,
+  };
+  const msgEl = document.getElementById('neg-msg');
+  try {
+    const r = await api('/negocios', 'POST', body);
+    msgEl.className = 'alert alert-success';
+    msgEl.innerHTML = `✅ Negocio creado!<br><strong>Token:</strong> <code>${r.token}</code><br><strong>Vence:</strong> ${fmtFecha(r.fecha_vencimiento)}`;
+    msgEl.style.display = 'block';
+    loadNegocios();
+    setTimeout(() => closeModal('modal-negocio'), 3000);
+  } catch(e) {
+    msgEl.className = 'alert alert-error'; msgEl.textContent = e.message; msgEl.style.display = 'block';
+  }
+}
+
+async function toggleEstado(id, nuevoEstado, nombre) {
+  const accion = nuevoEstado === 'activo' ? 'activar' : 'desactivar';
+  if (!confirm(`¿${accion.charAt(0).toUpperCase()+accion.slice(1)} el negocio "${nombre}"?`)) return;
+  await api('/negocios/'+id, 'PUT', { estado: nuevoEstado });
+  loadNegocios();
+}
+
+async function eliminarNegocio(id, nombre) {
+  if (!confirm(`¿Eliminar el negocio "${nombre}"? Esta acción no se puede deshacer.`)) return;
+  await api('/negocios/'+id, 'DELETE');
+  loadNegocios();
+}
+
+async function renovar(id, nombre) {
+  if (!confirm(`¿Renovar suscripción de "${nombre}" por 1 mes?`)) return;
+  const r = await api('/negocios/'+id+'/renovar', 'POST');
+  alert('✅ Renovado hasta ' + fmtFecha(r.fecha_vencimiento));
+  loadNegocios();
+}
+
+// CUENTA
+async function cambiarPass() {
+  const body = {
+    password_actual: document.getElementById('pass-actual').value,
+    password_nuevo: document.getElementById('pass-nueva').value
+  };
+  const conf = document.getElementById('pass-conf').value;
+  const msgEl = document.getElementById('pass-msg');
+  if (body.password_nuevo !== conf) {
+    msgEl.className = 'alert alert-error'; msgEl.textContent = 'Las contraseñas no coinciden';
+    msgEl.style.display = 'block'; return;
+  }
+  try {
+    await api('/password', 'PUT', body);
+    msgEl.className = 'alert alert-success'; msgEl.textContent = '✅ Contraseña cambiada';
+  } catch(e) {
+    msgEl.className = 'alert alert-error'; msgEl.textContent = e.message;
+  }
+  msgEl.style.display = 'block';
+}
+
+// Slugify automático
+document.addEventListener('DOMContentLoaded', () => {
+  const nomEl = document.getElementById('neg-nombre');
+  const slugEl = document.getElementById('neg-slug');
+  if (nomEl) nomEl.addEventListener('input', () => {
+    slugEl.value = nomEl.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+  });
+});
+</script>
+</body>
+</html>

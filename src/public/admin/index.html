@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TurnosApp - Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f172a;--card:#1e293b;--border:#334155;--accent:#6366f1;
+  --text:#e2e8f0;--muted:#94a3b8;--green:#10b981;--red:#ef4444;
+  --yellow:#f59e0b;--blue:#3b82f6;--sidebar:220px;--bottombar:64px
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+
+/* LOGIN */
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
+.login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:32px;width:100%;max-width:360px}
+.login-card h1{font-size:1.5rem;text-align:center;margin-bottom:6px;background:linear-gradient(135deg,var(--accent),#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.login-card p{text-align:center;color:var(--muted);margin-bottom:24px;font-size:.875rem}
+
+/* INPUTS */
+input,select,textarea{width:100%;background:#0f172a;border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:.9rem;outline:none;transition:border-color .2s;-webkit-appearance:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+.form-group{margin-bottom:14px}
+label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:5px}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 18px;border:none;border-radius:8px;font-size:.875rem;font-weight:500;cursor:pointer;transition:all .2s;text-decoration:none;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#4f46e5}
+.btn-success{background:var(--green);color:#fff}
+.btn-danger{background:var(--red);color:#fff}
+.btn-secondary{background:var(--border);color:var(--text)}.btn-secondary:hover{background:#475569}
+.btn-sm{padding:6px 12px;font-size:.8rem}
+.btn-block{width:100%;margin-top:8px}
+
+/* LAYOUT DESKTOP */
+#app{display:none}
+.sidebar{width:var(--sidebar);background:var(--card);border-right:1px solid var(--border);position:fixed;top:0;left:0;bottom:0;display:flex;flex-direction:column;z-index:50;overflow-y:auto}
+.sidebar-logo{padding:16px;border-bottom:1px solid var(--border)}
+.sidebar-logo h2{font-size:1rem;font-weight:600}
+.sidebar-logo small{color:var(--muted);font-size:.75rem}
+.nav-items{padding:8px;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:.875rem;margin-bottom:2px;transition:all .2s;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover,.nav-item.active{background:rgba(99,102,241,.15);color:var(--text)}
+.nav-item.active{color:var(--accent)}
+.nav-icon{font-size:1.1rem;width:20px;text-align:center}
+.sidebar-footer{padding:8px;border-top:1px solid var(--border)}
+.main{margin-left:var(--sidebar);padding:24px;min-height:100vh}
+
+/* BOTTOM NAV MOBILE */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);z-index:50;height:var(--bottombar)}
+.bottom-nav-inner{display:flex;height:100%}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:var(--muted);font-size:.6rem;font-weight:500;transition:all .2s;border:none;background:none;padding:4px 2px}
+.bnav-item.active{color:var(--accent)}
+.bnav-icon{font-size:1.35rem;line-height:1}
+
+/* MORE MENU MOBILE */
+#more-menu{display:none;position:fixed;bottom:var(--bottombar);left:0;right:0;background:var(--card);border-top:1px solid var(--border);z-index:100;padding:12px}
+.more-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.more-btn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;background:#0f172a;border:1px solid var(--border);border-radius:10px;cursor:pointer;color:var(--text);font-size:.72rem;font-weight:500;text-align:center;transition:all .2s}
+.more-btn:hover{border-color:var(--accent);color:var(--accent)}
+.more-btn .icon{font-size:1.4rem}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .sidebar{display:none!important}
+  .bottom-nav{display:block}
+  .main{margin-left:0;padding:14px;padding-bottom:calc(var(--bottombar) + 14px)}
+  .page-header{flex-wrap:wrap;gap:8px}
+  .page-header h1{font-size:1.2rem}
+  .hide-mobile{display:none!important}
+  .stats-grid{grid-template-columns:repeat(2,1fr)!important}
+  .modal{width:95vw!important;padding:18px!important;max-height:88vh}
+  .flex-wrap-mobile{flex-wrap:wrap}
+  table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
+}
+@media(min-width:769px){
+  .bottom-nav{display:none!important}
+  #more-menu{display:none!important}
+}
+
+/* CARDS & TABLES */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
+.stat-card .val{font-size:1.7rem;font-weight:700;margin-bottom:2px}
+.stat-card .lbl{font-size:.73rem;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap}
+.card-title{font-size:.95rem;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;padding:8px 10px;font-size:.75rem;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid rgba(51,65,85,.4);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:.72rem;font-weight:500;white-space:nowrap}
+.badge-green{background:rgba(16,185,129,.15);color:var(--green)}
+.badge-red{background:rgba(239,68,68,.15);color:var(--red)}
+.badge-yellow{background:rgba(245,158,11,.15);color:var(--yellow)}
+.badge-blue{background:rgba(59,130,246,.15);color:var(--blue)}
+
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;padding:16px}
+.modal-bg.open{display:flex}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;width:460px;max-width:100%;max-height:90vh;overflow-y:auto}
+.modal h2{font-size:1.1rem;margin-bottom:16px}
+
+/* UTILS */
+.flex{display:flex;gap:8px;align-items:center}
+.flex-between{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.text-muted{color:var(--muted);font-size:.8rem}
+.alert{padding:10px 14px;border-radius:8px;font-size:.875rem;margin-bottom:10px}
+.alert-success{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:var(--green)}
+.alert-error{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--red)}
+.page{display:none}.page.active{display:block}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.page-header h1{font-size:1.3rem;font-weight:600}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:14px}
+.tab{padding:7px 14px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);font-size:.85rem;transition:all .2s}
+.tab.active{border-bottom-color:var(--accent);color:var(--text)}
+.tab-content{display:none}.tab-content.active{display:block}
+
+/* CALENDARIO */
+.calendar-nav{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.calendar-nav h3{flex:1;text-align:center;font-size:.95rem}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-header{text-align:center;font-size:.65rem;color:var(--muted);padding:4px 0}
+.cal-day{min-height:56px;background:#0f172a;border:1px solid var(--border);border-radius:6px;padding:4px;cursor:pointer;transition:border-color .2s}
+.cal-day:hover{border-color:var(--accent)}
+.cal-day.today{border-color:var(--accent)}
+.cal-day.selected{background:rgba(99,102,241,.12);border-color:var(--accent)}
+.cal-day.other-month{opacity:.35}
+.cal-num{font-size:.72rem;font-weight:600;margin-bottom:2px}
+.cal-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);margin:1px 0}
+
+/* TURNO ITEMS */
+.turno-item{padding:10px 12px;background:#0f172a;border-radius:8px;margin-bottom:6px;border-left:3px solid var(--accent);cursor:pointer;transition:background .2s}
+.turno-item:hover{background:#162032}
+.turno-item .t-hora{font-weight:700;font-size:.9rem}
+.turno-item .t-nombre{font-size:.85rem}
+.turno-item .t-info{font-size:.75rem;color:var(--muted);margin-top:2px}
+
+/* WHATSAPP */
+.wa-status{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;background:#0f172a;border:1px solid var(--border);margin-bottom:14px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--red);flex-shrink:0}
+.dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+#qr-container{text-align:center;padding:20px;background:#fff;border-radius:12px;margin:14px 0;display:none}
+#qr-container img{max-width:220px;width:100%}
+
+/* PROF CARDS */
+.prof-card{background:#0f172a;border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px}
+.prof-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px}
+.btn-link{background:none;border:none;color:var(--muted);font-size:.85rem;cursor:pointer;display:flex;align-items:center;gap:4px;padding:4px 0;margin-bottom:10px}
+.btn-link:hover{color:var(--accent)}
+.prof-detalle-head{display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+.prof-detalle-head h1{font-size:1.2rem;font-weight:600}
+
+/* LOG */
+.log-item{padding:8px;border-bottom:1px solid rgba(51,65,85,.35);font-size:.78rem}
+.log-item:last-child{border-bottom:none}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <h1>TurnosApp</h1>
+    <p>Panel de administración</p>
+    <div class="form-group">
+      <label>Token de acceso</label>
+      <input type="text" id="login-token" placeholder="Pegá tu token aquí" autocomplete="off" />
+    </div>
+    <div id="login-error" class="alert alert-error" style="display:none"></div>
+    <button class="btn btn-primary btn-block" onclick="doLogin()">Ingresar</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- SIDEBAR (desktop) -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <h2 id="sb-nombre">Mi Negocio</h2>
+      <small id="sb-slug"></small>
+    </div>
+    <nav class="nav-items">
+      <button class="nav-item active" data-page="calendario"><span class="nav-icon">📅</span> Calendario</button>
+      <button class="nav-item" data-page="turnos"><span class="nav-icon">📋</span> Turnos</button>
+      <button class="nav-item" id="sb-profesionales" style="display:none" data-page="profesionales"><span class="nav-icon">👨‍⚕️</span> Profesionales</button>
+      <button class="nav-item" data-page="servicios"><span class="nav-icon">⚙️</span> Servicios</button>
+      <button class="nav-item" data-page="horarios"><span class="nav-icon">🕐</span> Horarios</button>
+      <button class="nav-item" data-page="clientes"><span class="nav-icon">👥</span> Clientes</button>
+      <button class="nav-item" data-page="mensajes"><span class="nav-icon">💬</span> Mensajes</button>
+      <button class="nav-item" data-page="whatsapp"><span class="nav-icon">📱</span> WhatsApp</button>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="nav-item" onclick="logout()"><span class="nav-icon">🚪</span> Salir</button>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV (mobile) -->
+  <nav class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <button class="bnav-item active" data-page="calendario"><span class="bnav-icon">📅</span>Inicio</button>
+      <button class="bnav-item" data-page="turnos"><span class="bnav-icon">📋</span>Turnos</button>
+      <button class="bnav-item" data-page="clientes"><span class="bnav-icon">👥</span>Clientes</button>
+      <button class="bnav-item" data-page="mensajes"><span class="bnav-icon">💬</span>Mensajes</button>
+      <button class="bnav-item" id="bnav-more" onclick="toggleMore()"><span class="bnav-icon">⋯</span>Más</button>
+    </div>
+  </nav>
+
+  <!-- MORE MENU (mobile) -->
+  <div id="more-menu">
+    <div class="more-grid">
+      <button class="more-btn" id="more-prof" onclick="showPageFromMore('profesionales')"><span class="icon">👨‍⚕️</span>Profesionales</button>
+      <button class="more-btn" onclick="showPageFromMore('servicios')"><span class="icon">⚙️</span>Servicios</button>
+      <button class="more-btn" onclick="showPageFromMore('horarios')"><span class="icon">🕐</span>Horarios</button>
+      <button class="more-btn" onclick="showPageFromMore('whatsapp')"><span class="icon">📱</span>WhatsApp</button>
+    </div>
+    <div style="display:flex;justify-content:center;margin-top:10px">
+      <button class="btn btn-danger btn-sm" onclick="logout()">🚪 Salir</button>
+    </div>
+  </div>
+
+  <main class="main">
+
+    <!-- CALENDARIO -->
+    <div id="page-calendario" class="page active">
+      <div class="page-header">
+        <h1>📅 Turnos</h1>
+        <button class="btn btn-primary btn-sm" onclick="openModalTurno()">+ Nuevo</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="val" id="s-hoy" style="color:var(--accent)">—</div><div class="lbl">Hoy</div></div>
+        <div class="stat-card"><div class="val" id="s-mes">—</div><div class="lbl">Este mes</div></div>
+        <div class="stat-card"><div class="val" id="s-clientes" style="color:var(--green)">—</div><div class="lbl">Clientes</div></div>
+        <div class="stat-card"><div class="val" id="s-proximos" style="color:var(--yellow)">—</div><div class="lbl">Próximos</div></div>
+      </div>
+      <div class="card">
+        <div class="calendar-nav">
+          <button class="btn btn-secondary btn-sm" onclick="navMes(-1)">‹</button>
+          <h3 id="cal-titulo"></h3>
+          <button class="btn btn-secondary btn-sm" onclick="navMes(1)">›</button>
+        </div>
+        <div class="cal-grid" id="cal-headers"></div>
+        <div class="cal-grid" id="cal-grid" style="margin-top:3px"></div>
+      </div>
+      <div class="card" id="card-dia" style="display:none">
+        <div class="card-header">
+          <div class="card-title" id="titulo-dia">Turnos del día</div>
+          <button class="btn btn-primary btn-sm" onclick="openModalTurno()">+ Agregar</button>
+        </div>
+        <div id="lista-dia"></div>
+      </div>
+    </div>
+
+    <!-- TURNOS -->
+    <div id="page-turnos" class="page">
+      <div class="page-header"><h1>📋 Todos los turnos</h1><button class="btn btn-primary btn-sm" onclick="openModalTurno()">+ Nuevo</button></div>
+      <div class="card">
+        <div class="flex flex-wrap-mobile" style="margin-bottom:12px;gap:8px">
+          <input type="date" id="filtro-desde" style="flex:1;min-width:130px" />
+          <input type="date" id="filtro-hasta" style="flex:1;min-width:130px" />
+          <select id="filtro-profesional" style="display:none;flex:1;min-width:150px"><option value="">Todos los profesionales</option></select>
+          <button class="btn btn-secondary btn-sm" onclick="loadTurnos()">Filtrar</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table><thead><tr>
+            <th>Fecha</th><th>Hora</th><th>Cliente</th>
+            <th class="hide-mobile">Servicio</th><th class="hide-mobile">Profesional</th><th>Estado</th><th></th>
+          </tr></thead>
+          <tbody id="tabla-turnos"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROFESIONALES -->
+    <div id="page-profesionales" class="page">
+      <div class="page-header"><h1>👨‍⚕️ Profesionales</h1><button class="btn btn-primary btn-sm" onclick="openModalProf()">+ Agregar</button></div>
+      <div id="lista-profesionales"></div>
+    </div>
+
+    <!-- DETALLE DE PROFESIONAL (agenda + servicios + horarios propios) -->
+    <div id="page-profesional-detalle" class="page">
+      <button class="btn-link" onclick="volverProfesionales()">‹ Volver a Profesionales</button>
+      <div class="prof-detalle-head">
+        <h1 id="pd-nombre">Profesional</h1>
+        <span class="badge badge-blue" id="pd-especialidad" style="display:none"></span>
+      </div>
+      <div class="card">
+        <div class="tabs">
+          <div class="tab active" onclick="showTab(this,'pdt','agenda');loadAgendaProf()">📅 Agenda</div>
+          <div class="tab" onclick="showTab(this,'pdt','servicios');loadServiciosProf()">⚙️ Servicios</div>
+          <div class="tab" onclick="showTab(this,'pdt','horarios');loadHorariosProf()">🕐 Horarios</div>
+        </div>
+
+        <div id="pdt-agenda" class="tab-content active">
+          <div class="flex flex-wrap-mobile" style="margin-bottom:12px;gap:8px;justify-content:space-between">
+            <div class="flex" style="gap:8px">
+              <input type="date" id="pd-desde" style="min-width:130px" />
+              <input type="date" id="pd-hasta" style="min-width:130px" />
+              <button class="btn btn-secondary btn-sm" onclick="loadAgendaProf()">Filtrar</button>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openModalTurno(profDetalle.id)">+ Nuevo turno</button>
+          </div>
+          <div id="pd-agenda-lista"></div>
+        </div>
+
+        <div id="pdt-servicios" class="tab-content">
+          <div class="flex" style="justify-content:flex-end;margin-bottom:10px">
+            <button class="btn btn-primary btn-sm" onclick="openModalServicio(profDetalle.id)">+ Agregar servicio</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table><thead><tr><th>Nombre</th><th>Duración</th><th class="hide-mobile">Precio</th><th>Estado</th><th></th></tr></thead>
+            <tbody id="pd-tabla-servicios"></tbody></table>
+          </div>
+        </div>
+
+        <div id="pdt-horarios" class="tab-content">
+          <div class="flex" style="justify-content:flex-end;margin-bottom:10px">
+            <button class="btn btn-primary btn-sm" onclick="openModalHorario(profDetalle.id)">+ Agregar horario</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table><thead><tr><th>Día</th><th>Inicio</th><th>Fin</th><th></th></tr></thead>
+            <tbody id="pd-tabla-horarios"></tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SERVICIOS -->
+    <div id="page-servicios" class="page">
+      <div class="page-header"><h1>⚙️ Servicios</h1><button class="btn btn-primary btn-sm" onclick="openModalServicio()">+ Agregar</button></div>
+      <div class="card" style="overflow-x:auto">
+        <table><thead><tr><th>Nombre</th><th>Duración</th><th class="hide-mobile">Precio</th><th class="hide-mobile">Profesional</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tabla-servicios"></tbody></table>
+      </div>
+    </div>
+
+    <!-- HORARIOS -->
+    <div id="page-horarios" class="page">
+      <div class="page-header"><h1>🕐 Horarios</h1><button class="btn btn-primary btn-sm" onclick="openModalHorario()">+ Agregar</button></div>
+      <div class="card" style="overflow-x:auto">
+        <table><thead><tr><th>Día</th><th>Inicio</th><th>Fin</th><th class="hide-mobile">Profesional</th><th></th></tr></thead>
+        <tbody id="tabla-horarios"></tbody></table>
+      </div>
+    </div>
+
+    <!-- CLIENTES -->
+    <div id="page-clientes" class="page">
+      <div class="page-header"><h1>👥 Clientes</h1></div>
+      <div class="card" style="overflow-x:auto">
+        <table><thead><tr><th>Nombre</th><th>DNI</th><th class="hide-mobile">Teléfono</th><th>Turnos</th></tr></thead>
+        <tbody id="tabla-clientes"></tbody></table>
+      </div>
+    </div>
+
+    <!-- MENSAJES -->
+    <div id="page-mensajes" class="page">
+      <div class="page-header"><h1>💬 Mensajes</h1></div>
+      <div class="card">
+        <div class="tabs">
+          <div class="tab active" onclick="showTab(this,'msgt','config')">Configuración</div>
+          <div class="tab" onclick="showTab(this,'msgt','historial');loadLogs()">Historial</div>
+        </div>
+        <div id="msgt-config" class="tab-content active">
+          <p class="text-muted" style="margin-bottom:16px">Variables: <code>{{nombre}}</code> <code>{{fecha}}</code> <code>{{hora}}</code> <code>{{servicio}}</code> <code>{{profesional}}</code> <code>{{negocio}}</code></p>
+
+          <div class="card-title" style="margin-bottom:8px">✅ Confirmación de turno</div>
+          <p class="text-muted" style="margin-bottom:10px">Se envía apenas se reserva un turno (online o desde el panel).</p>
+          <div id="msg-confirmacion" style="margin-bottom:20px"></div>
+
+          <div class="card-title" style="margin-bottom:8px">❌ Cancelación de turno</div>
+          <p class="text-muted" style="margin-bottom:10px">Se envía cuando el turno pasa a estado cancelado.</p>
+          <div id="msg-cancelacion" style="margin-bottom:20px"></div>
+
+          <div class="flex-between" style="margin-bottom:8px">
+            <div class="card-title">📅 Recordatorios</div>
+            <button class="btn btn-secondary btn-sm" onclick="openModalMsg('recordatorio')">+ Nuevo recordatorio</button>
+          </div>
+          <p class="text-muted" style="margin-bottom:10px">Podés crear más de uno, por ejemplo uno 3 días antes y otro 1 día antes.</p>
+          <div id="msg-recordatorios"></div>
+        </div>
+        <div id="msgt-historial" class="tab-content">
+          <div id="logs-container"><p class="text-muted">Cargando...</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WHATSAPP -->
+    <div id="page-whatsapp" class="page">
+      <div class="page-header"><h1>📱 WhatsApp</h1></div>
+      <div class="card">
+        <div class="wa-status">
+          <div class="dot" id="wa-dot"></div>
+          <div>
+            <div id="wa-text" style="font-size:.9rem">Verificando...</div>
+            <div id="wa-phone" class="text-muted"></div>
+          </div>
+        </div>
+        <div id="qr-container">
+          <p style="color:#333;font-size:.85rem;margin-bottom:10px">Escaneá este código con WhatsApp</p>
+          <img id="qr-img" src="" alt="QR Code" style="max-width:220px;width:100%" />
+          <p style="color:#555;font-size:.75rem;margin-top:8px">Abrí WhatsApp → ⋯ → Dispositivos vinculados → Vincular dispositivo</p>
+          <p style="color:#888;font-size:.72rem;margin-top:4px">El QR se renueva cada 20 segundos</p>
+        </div>
+        <div id="wa-acciones">
+          <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="conectarWA()" id="btn-conectar">📱 Conectar WhatsApp</button>
+          <button class="btn btn-danger" style="width:100%;display:none" onclick="desconectarWA()" id="btn-desconectar">Desconectar</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL TURNO (flujo en 3 pasos) -->
+<div class="modal-bg" id="modal-turno">
+  <div class="modal">
+    <!-- PASO 1: DNI del cliente -->
+    <div id="turno-paso-dni">
+      <h2>Nuevo Turno</h2>
+      <div class="form-group">
+        <label>DNI del cliente</label>
+        <input type="text" id="nt-dni" placeholder="DNI" />
+      </div>
+      <div id="nt-dni-msg" style="display:none"></div>
+      <div class="flex" style="justify-content:flex-end;gap:8px;margin-top:8px">
+        <button class="btn btn-secondary" onclick="closeModal('modal-turno')">Cancelar</button>
+        <button class="btn btn-primary" onclick="continuarDesdeDni()">Continuar</button>
+      </div>
+    </div>
+
+    <!-- PASO 2: Cliente nuevo (solo si el DNI no existe) -->
+    <div id="turno-paso-cliente" style="display:none">
+      <h2>Nuevo Cliente</h2>
+      <div class="form-group"><label>DNI</label><input type="text" id="nt-c-dni" disabled /></div>
+      <div class="form-group"><label>Teléfono *</label><input type="text" id="nt-c-telefono" placeholder="549..." /></div>
+      <div class="form-group"><label>Nombre completo *</label><input type="text" id="nt-c-nombre" /></div>
+      <div id="nt-cliente-msg" style="display:none"></div>
+      <div class="flex" style="justify-content:flex-end;gap:8px;margin-top:8px">
+        <button class="btn btn-secondary" onclick="showPasoTurno('dni')">Atrás</button>
+        <button class="btn btn-primary" onclick="crearClienteYContinuar()">Continuar</button>
+      </div>
+    </div>
+
+    <!-- PASO 3: Datos del turno -->
+    <div id="turno-paso-datos" style="display:none">
+      <h2>Nuevo Turno</h2>
+      <div class="form-group"><label>Cliente</label><div id="nt-cliente-info" style="font-weight:600"></div></div>
+      <div class="form-group"><label>Servicio *</label>
+        <select id="nt-servicio" onchange="onServicioChangeNuevo()"><option value="">Elegir servicio...</option></select>
+      </div>
+      <div id="nt-prof-group" class="form-group" style="display:none">
+        <label>Profesional *</label>
+        <select id="nt-profesional" onchange="cargarHorariosDisponibles()"></select>
+      </div>
+      <div class="form-group"><label>Fecha *</label><input type="date" id="nt-fecha" onchange="cargarHorariosDisponibles()" /></div>
+      <div class="form-group"><label>Hora *</label>
+        <select id="nt-hora"><option value="">Elegí fecha y servicio primero</option></select>
+      </div>
+      <div id="t-msg" style="display:none"></div>
+      <div class="flex" style="justify-content:flex-end;gap:8px;margin-top:8px">
+        <button class="btn btn-secondary" onclick="showPasoTurno('dni')">Atrás</button>
+        <button class="btn btn-primary" onclick="guardarTurno()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PROFESIONAL -->
+<div class="modal-bg" id="modal-prof">
+  <div class="modal">
+    <h2 id="modal-prof-title">Nuevo Profesional</h2>
+    <input type="hidden" id="p-id" />
+    <div class="form-group"><label>Nombre *</label><input type="text" id="p-nombre" /></div>
+    <div class="form-group"><label>Especialidad</label><input type="text" id="p-especialidad" /></div>
+    <div class="form-group"><label>Teléfono (WhatsApp, para avisarle de sus turnos)</label><input type="text" id="p-telefono" placeholder="549XXXXXXXXXX" /></div>
+    <div class="form-group"><label>Descripción</label>
+      <textarea id="p-descripcion" rows="3" style="resize:vertical;font-family:inherit"></textarea>
+    </div>
+    <div id="p-msg" style="display:none"></div>
+    <div class="flex" style="justify-content:flex-end;gap:8px;margin-top:8px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-prof')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarProf()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SERVICIO -->
+<div class="modal-bg" id="modal-servicio">
+  <div class="modal">
+    <h2 id="modal-srv-title">Nuevo Servicio</h2>
+    <input type="hidden" id="srv-id" />
+    <div id="srv-prof-group" class="form-group" style="display:none">
+      <label>Profesionales (vacío = todos)</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px" id="srv-prof-check"></div>
+    </div>
+    <div class="form-group"><label>Nombre *</label><input type="text" id="srv-nombre" /></div>
+    <div class="flex flex-wrap-mobile" style="gap:8px">
+      <div class="form-group" style="flex:1"><label>Duración (min)</label><input type="number" id="srv-duracion" value="30" /></div>
+      <div class="form-group" style="flex:1"><label>Precio ($)</label><input type="number" id="srv-precio" value="0" /></div>
+    </div>
+    <div id="srv-msg" style="display:none"></div>
+    <div class="flex" style="justify-content:flex-end;gap:8px;margin-top:8px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-servicio')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarServicio()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL HORARIO -->
+<div class="modal-bg" id="modal-horario">
+  <div class="modal">
+    <h2>Nuevo Horario</h2>
+    <div id="hor-prof-group" class="form-group" style="display:none">
+      <label>Profesional</label>
+      <select id="hor-profesional"><option value="">Todos</option></select>
+    </div>
+    <div class="form-group">
+      <label>Días</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px" id="dias-check">
+        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="1"> Lun</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="2"> Mar</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="3"> Mié</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="4"> Jue</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="5"> Vie</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="6"> Sáb</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="0"> Dom</label>
+      </div>
+    </div>
+    <div class="flex flex-wrap-mobile" style="gap:8px">
+      <div class="form-group" style="flex:1"><label>Inicio</label><input type="time" id="hor-inicio" value="09:00" /></div>
+      <div class="form-group" style="flex:1"><label>Fin</label><input type="time" id="hor-fin" value="18:00" /></div>
+    </div>
+    <div class="flex" style="justify-content:flex-end;gap:8px;margin-top:8px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-horario')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarHorario()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MENSAJE -->
+<div class="modal-bg" id="modal-msg">
+  <div class="modal">
+    <h2 id="modal-msg-title">Editar Mensaje</h2>
+    <input type="hidden" id="msg-id" />
+    <input type="hidden" id="msg-tipo" />
+    <div class="form-group"><label>Activo</label>
+      <select id="msg-activo"><option value="1">Sí</option><option value="0">No</option></select>
+    </div>
+    <div class="form-group"><label>Mensaje</label>
+      <textarea id="msg-texto" rows="5" style="resize:vertical;font-family:inherit"></textarea>
+    </div>
+    <div id="msg-recordatorio-fields" class="flex flex-wrap-mobile" style="gap:8px">
+      <div class="form-group" style="flex:1"><label>Cantidad</label><input type="number" id="msg-dias" min="0" /></div>
+      <div class="form-group" style="flex:1"><label>Unidad</label>
+        <select id="msg-unidad" onchange="actualizarCamposMsg()"><option value="dias">Día(s) antes</option><option value="horas">Hora(s) antes</option></select>
+      </div>
+      <div class="form-group" style="flex:1" id="msg-hora-group"><label>Hora de envío</label><input type="time" id="msg-hora" /></div>
+    </div>
+    <div id="msg-form-error" style="display:none"></div>
+    <div class="flex" style="justify-content:flex-end;gap:8px;margin-top:8px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-msg')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarMsg()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let TOKEN = '', NEGOCIO = null;
+let calFecha = new Date();
+let selectedDate = null;
+let turnosPorFecha = {};
+let profesionales = [];
+let mensajes = [];
+let waStream = null;
+let profDetalle = null; // {id, nombre, especialidad} cuando se está viendo la agenda propia de un profesional
+const DIAS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const DIAS_CORTO = ['D','L','M','X','J','V','S'];
+
+async function api(path, method='GET', body=null) {
+  const opts = { method, headers: { 'Content-Type':'application/json', Authorization:'Bearer '+TOKEN } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch('/api/admin'+path, opts);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Error');
+  return data;
+}
+
+async function doLogin() {
+  const token = document.getElementById('login-token').value.trim();
+  try {
+    const r = await fetch('/api/admin/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token }) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error);
+    TOKEN = data.token;
+    NEGOCIO = data.negocio;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('sb-nombre').textContent = NEGOCIO.nombre;
+    document.getElementById('sb-slug').textContent = '/reservar/' + NEGOCIO.slug;
+    const esMulti = NEGOCIO.tipo === 'multi';
+    document.getElementById('sb-profesionales').style.display = esMulti ? 'flex' : 'none';
+    document.getElementById('more-prof').style.display = esMulti ? 'flex' : 'none';
+    const filtroProf = document.getElementById('filtro-profesional');
+    if (esMulti) {
+      profesionales = await api('/profesionales');
+      filtroProf.innerHTML = '<option value="">Todos los profesionales</option>'+profesionales.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+      filtroProf.style.display = 'block';
+    } else {
+      filtroProf.style.display = 'none';
+    }
+    loadStats();
+    renderCalendario();
+    checkWAEstado();
+    setInterval(checkWAEstado, 15000);
+  } catch(e) {
+    const el = document.getElementById('login-error');
+    el.style.display = 'block'; el.textContent = e.message;
+  }
+}
+
+document.getElementById('login-token').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+function logout() { TOKEN=''; NEGOCIO=null; location.reload(); }
+
+// Cerrar modales con clic en fondo
+document.querySelectorAll('.modal-bg').forEach(bg => bg.addEventListener('click', e => { if(e.target===bg) bg.classList.remove('open'); }));
+
+// NAVEGACIÓN
+function navigateTo(p) {
+  profDetalle = null;
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  document.querySelectorAll('.sidebar .nav-item[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page===p));
+  document.querySelectorAll('.bnav-item[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page===p));
+  document.getElementById('more-menu').style.display = 'none';
+  if (p==='calendario') { loadStats(); renderCalendario(); }
+  if (p==='turnos') loadTurnos();
+  if (p==='profesionales') loadProfesionales();
+  if (p==='servicios') loadServicios();
+  if (p==='horarios') loadHorarios();
+  if (p==='clientes') loadClientes();
+  if (p==='mensajes') loadMensajesAdmin();
+  if (p==='whatsapp') checkWAEstado();
+}
+
+document.querySelectorAll('[data-page]').forEach(el => {
+  el.addEventListener('click', () => navigateTo(el.dataset.page));
+});
+
+function showPageFromMore(p) { document.getElementById('more-menu').style.display='none'; navigateTo(p); }
+
+function toggleMore() {
+  const m = document.getElementById('more-menu');
+  m.style.display = m.style.display==='none' ? 'block' : 'none';
+}
+
+function showTab(el, group, name) {
+  document.querySelectorAll(`[id^="${group}-"]`).forEach(e => e.classList.remove('active'));
+  document.getElementById(group+'-'+name).classList.add('active');
+  el.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function fmtFecha(f) { if(!f) return '—'; const [y,m,d]=f.split('-'); return `${d}/${m}/${y}`; }
+
+// STATS
+async function loadStats() {
+  try {
+    const s = await api('/stats');
+    document.getElementById('s-hoy').textContent = s.totalHoy;
+    document.getElementById('s-mes').textContent = s.totalMes;
+    document.getElementById('s-clientes').textContent = s.clientes;
+    document.getElementById('s-proximos').textContent = s.proximos;
+  } catch {}
+}
+
+// CALENDARIO
+async function renderCalendario() {
+  const y = calFecha.getFullYear(), m = calFecha.getMonth();
+  document.getElementById('cal-titulo').textContent = calFecha.toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+  document.getElementById('cal-headers').innerHTML = DIAS_CORTO.map(d=>`<div class="cal-header">${d}</div>`).join('');
+  const desde = `${y}-${String(m+1).padStart(2,'0')}-01`;
+  const lastDay = new Date(y,m+1,0).getDate();
+  const hasta = `${y}-${String(m+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  try {
+    const turnos = await api(`/turnos?desde=${desde}&hasta=${hasta}`);
+    turnosPorFecha = {};
+    turnos.forEach(t => { if(!turnosPorFecha[t.fecha]) turnosPorFecha[t.fecha]=[]; turnosPorFecha[t.fecha].push(t); });
+  } catch {}
+  const primerDia = new Date(y,m,1).getDay();
+  const hoy = new Date().toISOString().split('T')[0];
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+  const prevDays = new Date(y,m,0).getDate();
+  for(let i=primerDia-1;i>=0;i--) {
+    const d=document.createElement('div'); d.className='cal-day other-month';
+    d.innerHTML=`<div class="cal-num">${prevDays-i}</div>`; grid.appendChild(d);
+  }
+  for(let day=1;day<=lastDay;day++) {
+    const fecha=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const turnos=turnosPorFecha[fecha]||[];
+    const d=document.createElement('div');
+    d.className=`cal-day${fecha===hoy?' today':''}${fecha===selectedDate?' selected':''}`;
+    d.innerHTML=`<div class="cal-num">${day}</div>${turnos.slice(0,3).map(()=>'<div class="cal-dot"></div>').join('')}${turnos.length>3?`<div style="font-size:.55rem;color:var(--muted)">+${turnos.length-3}</div>`:''}`;
+    d.onclick=()=>selDia(fecha); grid.appendChild(d);
+  }
+}
+
+function navMes(dir) { calFecha.setMonth(calFecha.getMonth()+dir); renderCalendario(); }
+
+function selDia(fecha) {
+  selectedDate = fecha;
+  renderCalendario();
+  const turnos = (turnosPorFecha[fecha]||[]).sort((a,b)=>a.hora.localeCompare(b.hora));
+  document.getElementById('card-dia').style.display='block';
+  document.getElementById('titulo-dia').textContent=`Turnos del ${fmtFecha(fecha)}`;
+  const lista = document.getElementById('lista-dia');
+  if(!turnos.length) { lista.innerHTML='<p class="text-muted" style="padding:8px">Sin turnos para este día.</p>'; return; }
+  lista.innerHTML=turnos.map(t=>`
+    <div class="turno-item" onclick="editarEstadoTurno(${t.id},'${t.cliente_nombre}','${t.estado}')">
+      <div class="flex-between">
+        <span class="t-hora">${t.hora} — <span class="t-nombre">${t.cliente_nombre}</span></span>
+        <span class="badge ${t.estado==='confirmado'?'badge-green':t.estado==='cancelado'?'badge-red':'badge-yellow'}">${t.estado}</span>
+      </div>
+      <div class="t-info">${t.servicio_nombre||'Sin servicio'}${t.profesional_nombre?' · '+t.profesional_nombre:''} · ${t.cliente_telefono||'Sin tel'}</div>
+    </div>
+  `).join('');
+}
+
+async function editarEstadoTurno(id, nombre, estadoActual) {
+  const estados = ['pendiente','confirmado','cancelado'];
+  const nuevo = prompt(`Turno de: ${nombre}\nEstado actual: ${estadoActual}\n\nNuevo estado (pendiente/confirmado/cancelado):`, estadoActual);
+  if (!nuevo || nuevo===estadoActual || !estados.includes(nuevo)) return;
+  await api('/turnos/'+id,'PUT',{estado:nuevo});
+  refreshTurnos();
+}
+
+// Mantiene en sincro el calendario, "Todos los turnos" y la agenda del profesional (si está abierta)
+async function refreshTurnos() {
+  loadStats();
+  await renderCalendario();
+  if (selectedDate) selDia(selectedDate);
+  loadTurnos();
+  if (profDetalle) loadAgendaProf();
+}
+
+// TURNOS
+async function loadTurnos() {
+  const desde=document.getElementById('filtro-desde').value;
+  const hasta=document.getElementById('filtro-hasta').value;
+  const profId=document.getElementById('filtro-profesional').value;
+  let url='/turnos';
+  const qs=[];
+  if(desde&&hasta) qs.push(`desde=${desde}`,`hasta=${hasta}`);
+  if(profId) qs.push(`profesional_id=${profId}`);
+  if(qs.length) url+='?'+qs.join('&');
+  const turnos=await api(url);
+  document.getElementById('tabla-turnos').innerHTML=turnos.map(t=>`
+    <tr>
+      <td>${fmtFecha(t.fecha)}</td><td>${t.hora}</td>
+      <td>${t.cliente_nombre}<br><small class="text-muted">${t.cliente_telefono||''}</small></td>
+      <td class="hide-mobile">${t.servicio_nombre||'—'}</td>
+      <td class="hide-mobile">${t.profesional_nombre||'—'}</td>
+      <td><select style="background:var(--border);border:none;color:var(--text);padding:4px 8px;border-radius:6px;font-size:.8rem" onchange="cambiarEstado(${t.id},this.value)">
+        <option value="pendiente" ${t.estado==='pendiente'?'selected':''}>⏳ Pendiente</option>
+        <option value="confirmado" ${t.estado==='confirmado'?'selected':''}>✅ Confirmado</option>
+        <option value="cancelado" ${t.estado==='cancelado'?'selected':''}>❌ Cancelado</option>
+      </select></td>
+      <td><button class="btn btn-sm btn-danger" onclick="eliminarTurno(${t.id})">🗑</button></td>
+    </tr>
+  `).join('');
+}
+
+async function cambiarEstado(id,estado) { await api('/turnos/'+id,'PUT',{estado}); refreshTurnos(); }
+async function eliminarTurno(id) { if(!confirm('¿Eliminar turno?'))return; await api('/turnos/'+id,'DELETE'); refreshTurnos(); }
+
+// MODAL TURNO (flujo en 3 pasos: DNI -> [cliente nuevo] -> datos del turno)
+let ntForcedProfId = null;
+let ntCliente = null;
+let ntServiciosCache = [];
+
+async function openModalTurno(forcedProfId) {
+  ntForcedProfId = forcedProfId || null;
+  ntCliente = null;
+  document.getElementById('nt-dni').value = '';
+  document.getElementById('nt-dni-msg').style.display = 'none';
+  showPasoTurno('dni');
+  document.getElementById('modal-turno').classList.add('open');
+}
+
+function showPasoTurno(paso) {
+  document.getElementById('turno-paso-dni').style.display = paso === 'dni' ? 'block' : 'none';
+  document.getElementById('turno-paso-cliente').style.display = paso === 'cliente' ? 'block' : 'none';
+  document.getElementById('turno-paso-datos').style.display = paso === 'datos' ? 'block' : 'none';
+}
+
+async function continuarDesdeDni() {
+  const dni = document.getElementById('nt-dni').value.trim();
+  const msgEl = document.getElementById('nt-dni-msg');
+  msgEl.style.display = 'none';
+  if (!dni) { msgEl.className = 'alert alert-error'; msgEl.textContent = 'Ingresá un DNI'; msgEl.style.display = 'block'; return; }
+  try {
+    const c = await api('/clientes/buscar/' + encodeURIComponent(dni));
+    ntCliente = { dni, nombre: (c.nombre + ' ' + c.apellido).trim(), telefono: c.telefono, email: c.email || '' };
+    await irAPasoDatos();
+  } catch {
+    // DNI no encontrado: pasamos al alta rápida de cliente, sin pedir el DNI de nuevo
+    document.getElementById('nt-c-dni').value = dni;
+    document.getElementById('nt-c-telefono').value = '549';
+    document.getElementById('nt-c-nombre').value = '';
+    document.getElementById('nt-cliente-msg').style.display = 'none';
+    showPasoTurno('cliente');
+  }
+}
+
+async function crearClienteYContinuar() {
+  const dni = document.getElementById('nt-c-dni').value;
+  const telefono = document.getElementById('nt-c-telefono').value.trim();
+  const nombre = document.getElementById('nt-c-nombre').value.trim();
+  const msgEl = document.getElementById('nt-cliente-msg');
+  msgEl.style.display = 'none';
+  if (!telefono || !nombre) {
+    msgEl.className = 'alert alert-error'; msgEl.textContent = 'Completá teléfono y nombre'; msgEl.style.display = 'block'; return;
+  }
+  try {
+    await api('/clientes', 'POST', { dni, nombre, telefono });
+    ntCliente = { dni, nombre, telefono, email: '' };
+    await irAPasoDatos();
+  } catch (e) { msgEl.className = 'alert alert-error'; msgEl.textContent = e.message; msgEl.style.display = 'block'; }
+}
+
+async function irAPasoDatos() {
+  document.getElementById('nt-cliente-info').textContent = ntCliente.nombre + ' — ' + ntCliente.telefono;
+  document.getElementById('nt-fecha').value = selectedDate || new Date().toISOString().split('T')[0];
+  document.getElementById('nt-hora').innerHTML = '<option value="">Elegí fecha y servicio primero</option>';
+  document.getElementById('t-msg').style.display = 'none';
+
+  ntServiciosCache = await api('/servicios');
+  let serviciosOpts = ntServiciosCache;
+  if (ntForcedProfId) serviciosOpts = serviciosOpts.filter(s => !s.profesional_id || s.profesional_id == ntForcedProfId);
+  document.getElementById('nt-servicio').innerHTML = '<option value="">Elegir servicio...</option>' +
+    serviciosOpts.map(s => `<option value="${s.id}">${s.nombre} (${s.duracion_minutos || 30} min)</option>`).join('');
+  document.getElementById('nt-servicio').value = '';
+
+  const profGroup = document.getElementById('nt-prof-group');
+  if (ntForcedProfId) {
+    profGroup.style.display = 'none';
+  } else if (NEGOCIO?.tipo === 'multi') {
+    if (!profesionales.length) profesionales = await api('/profesionales');
+    profGroup.style.display = 'block';
+    document.getElementById('nt-profesional').innerHTML = '<option value="">Elegí un servicio primero</option>';
+  } else {
+    profGroup.style.display = 'none';
+  }
+  showPasoTurno('datos');
+}
+
+async function onServicioChangeNuevo() {
+  const srvId = document.getElementById('nt-servicio').value;
+  document.getElementById('nt-hora').innerHTML = '<option value="">Elegí fecha primero</option>';
+  if (!ntForcedProfId && NEGOCIO?.tipo === 'multi') {
+    const selProf = document.getElementById('nt-profesional');
+    if (!srvId) { selProf.innerHTML = '<option value="">Elegí un servicio primero</option>'; return; }
+    const servicio = ntServiciosCache.find(s => String(s.id) === srvId);
+    const candidatos = (servicio?.profesional_ids && servicio.profesional_ids.length)
+      ? profesionales.filter(p => servicio.profesional_ids.includes(p.id))
+      : profesionales.filter(p => p.activo !== 0);
+    selProf.innerHTML = candidatos.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+  }
+  await cargarHorariosDisponibles();
+}
+
+async function cargarHorariosDisponibles() {
+  const fecha = document.getElementById('nt-fecha').value;
+  const servicioId = document.getElementById('nt-servicio').value;
+  const horaSel = document.getElementById('nt-hora');
+  let profId = ntForcedProfId;
+  if (!profId && NEGOCIO?.tipo === 'multi') profId = document.getElementById('nt-profesional').value;
+
+  if (!fecha) { horaSel.innerHTML = '<option value="">Elegí una fecha</option>'; return; }
+  if (!servicioId) { horaSel.innerHTML = '<option value="">Elegí un servicio</option>'; return; }
+  if (NEGOCIO?.tipo === 'multi' && !ntForcedProfId && !profId) { horaSel.innerHTML = '<option value="">Elegí un profesional</option>'; return; }
+
+  horaSel.innerHTML = '<option value="">Buscando horarios...</option>';
+  try {
+    const qs = new URLSearchParams({ fecha, servicio_id: servicioId });
+    if (profId) qs.set('profesional_id', profId);
+    const slots = await api('/disponibilidad?' + qs.toString());
+    horaSel.innerHTML = slots.length
+      ? '<option value="">Elegir hora...</option>' + slots.map(h => `<option value="${h}">${h}</option>`).join('')
+      : '<option value="">Sin horarios disponibles ese día</option>';
+  } catch { horaSel.innerHTML = '<option value="">Error buscando horarios</option>'; }
+}
+
+async function guardarTurno() {
+  const servicioId = document.getElementById('nt-servicio').value;
+  const fecha = document.getElementById('nt-fecha').value;
+  const hora = document.getElementById('nt-hora').value;
+  const msgEl = document.getElementById('t-msg');
+  msgEl.style.display = 'none';
+  if (!servicioId) { msgEl.className = 'alert alert-error'; msgEl.textContent = 'Elegí un servicio'; msgEl.style.display = 'block'; return; }
+  if (!fecha || !hora) { msgEl.className = 'alert alert-error'; msgEl.textContent = 'Elegí fecha y hora'; msgEl.style.display = 'block'; return; }
+
+  const body = {
+    profesional_id: ntForcedProfId || (NEGOCIO?.tipo === 'multi' ? (document.getElementById('nt-profesional').value || null) : null),
+    servicio_id: servicioId,
+    cliente_dni: ntCliente.dni,
+    cliente_nombre: ntCliente.nombre,
+    cliente_telefono: ntCliente.telefono,
+    cliente_email: ntCliente.email || '',
+    fecha, hora,
+  };
+  try {
+    await api('/turnos', 'POST', body);
+    closeModal('modal-turno');
+    refreshTurnos();
+  } catch (e) { msgEl.className = 'alert alert-error'; msgEl.textContent = e.message; msgEl.style.display = 'block'; }
+}
+
+// PROFESIONALES
+async function loadProfesionales() {
+  const profs = await api('/profesionales');
+  profesionales = profs; // cache global, la usan también el modal de turnos y la vista de detalle
+  const c = document.getElementById('lista-profesionales');
+  if(!profs.length){c.innerHTML='<div class="card"><p class="text-muted">Sin profesionales.</p></div>';return;}
+  c.innerHTML=profs.map(p=>`
+    <div class="prof-card">
+      <div class="prof-card-head">
+        <div>
+          <strong>${p.nombre}</strong>
+          ${p.especialidad?`<span class="badge badge-blue" style="margin-left:6px">${p.especialidad}</span>`:''}
+          <span class="badge ${p.activo?'badge-green':'badge-red'}" style="margin-left:4px">${p.activo?'Activo':'Inactivo'}</span>
+        </div>
+        <div class="flex">
+          <button class="btn btn-sm btn-primary" onclick="showProfDetalle(${p.id})">📅 Agenda</button>
+          <button class="btn btn-sm btn-secondary" onclick="editarProf(${p.id})">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="eliminarProf(${p.id})">🗑</button>
+        </div>
+      </div>
+      ${p.descripcion?`<div class="text-muted">${p.descripcion}</div>`:''}
+    </div>
+  `).join('');
+}
+
+function openModalProf(){
+  ['p-id','p-nombre','p-especialidad','p-descripcion'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('p-telefono').value='549';
+  document.getElementById('p-msg').style.display='none';
+  document.getElementById('modal-prof-title').textContent='Nuevo Profesional';
+  document.getElementById('modal-prof').classList.add('open');
+}
+
+async function editarProf(id){
+  const profs=await api('/profesionales');
+  const p=profs.find(x=>x.id===id); if(!p) return;
+  document.getElementById('p-id').value=p.id;
+  document.getElementById('p-nombre').value=p.nombre;
+  document.getElementById('p-especialidad').value=p.especialidad||'';
+  document.getElementById('p-descripcion').value=p.descripcion||'';
+  document.getElementById('p-telefono').value=p.telefono||'549';
+  document.getElementById('modal-prof-title').textContent='Editar Profesional';
+  document.getElementById('modal-prof').classList.add('open');
+}
+
+async function guardarProf(){
+  const id=document.getElementById('p-id').value;
+  const body={nombre:document.getElementById('p-nombre').value,especialidad:document.getElementById('p-especialidad').value,descripcion:document.getElementById('p-descripcion').value,telefono:document.getElementById('p-telefono').value.trim(),activo:1};
+  const msgEl=document.getElementById('p-msg');
+  try{if(id)await api('/profesionales/'+id,'PUT',body);else await api('/profesionales','POST',body);closeModal('modal-prof');loadProfesionales();}
+  catch(e){msgEl.className='alert alert-error';msgEl.textContent=e.message;msgEl.style.display='block';}
+}
+
+async function eliminarProf(id){if(!confirm('¿Eliminar profesional?'))return;await api('/profesionales/'+id,'DELETE');loadProfesionales();}
+
+// DETALLE DE PROFESIONAL (agenda, servicios y horarios propios)
+function showProfDetalle(id) {
+  const p = profesionales.find(x=>x.id===id);
+  if (!p) return;
+  profDetalle = p;
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  document.getElementById('page-profesional-detalle').classList.add('active');
+  document.querySelectorAll('.sidebar .nav-item[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page==='profesionales'));
+  document.querySelectorAll('.bnav-item[data-page]').forEach(el => el.classList.remove('active'));
+  document.getElementById('more-menu').style.display = 'none';
+
+  document.getElementById('pd-nombre').textContent = '👨‍⚕️ ' + p.nombre;
+  const espEl = document.getElementById('pd-especialidad');
+  if (p.especialidad) { espEl.style.display='inline-flex'; espEl.textContent = p.especialidad; }
+  else espEl.style.display = 'none';
+
+  // volver siempre a la pestaña Agenda al entrar
+  const tabsEl = document.querySelectorAll('#page-profesional-detalle .tab');
+  const contentsEl = document.querySelectorAll('#page-profesional-detalle .tab-content');
+  tabsEl.forEach((t,i)=>t.classList.toggle('active', i===0));
+  contentsEl.forEach((t,i)=>t.classList.toggle('active', i===0));
+
+  document.getElementById('pd-desde').value = '';
+  document.getElementById('pd-hasta').value = '';
+  loadAgendaProf();
+}
+
+function volverProfesionales() { navigateTo('profesionales'); }
+
+async function loadAgendaProf() {
+  if (!profDetalle) return;
+  const desde = document.getElementById('pd-desde').value;
+  const hasta = document.getElementById('pd-hasta').value;
+  let url = '/turnos?profesional_id=' + profDetalle.id;
+  if (desde && hasta) url += `&desde=${desde}&hasta=${hasta}`;
+  const turnos = await api(url);
+  const lista = document.getElementById('pd-agenda-lista');
+  if (!turnos.length) { lista.innerHTML = '<p class="text-muted" style="padding:8px">Sin turnos para este profesional.</p>'; return; }
+  lista.innerHTML = turnos
+    .sort((a,b) => a.fecha===b.fecha ? a.hora.localeCompare(b.hora) : a.fecha.localeCompare(b.fecha))
+    .map(t => `
+      <div class="turno-item" onclick="editarEstadoTurno(${t.id},'${t.cliente_nombre}','${t.estado}')">
+        <div class="flex-between">
+          <span class="t-hora">${fmtFecha(t.fecha)} · ${t.hora} — <span class="t-nombre">${t.cliente_nombre}</span></span>
+          <span class="badge ${t.estado==='confirmado'?'badge-green':t.estado==='cancelado'?'badge-red':'badge-yellow'}">${t.estado}</span>
+        </div>
+        <div class="t-info">${t.servicio_nombre||'Sin servicio'} · ${t.cliente_telefono||'Sin tel'}</div>
+      </div>
+    `).join('');
+}
+
+async function loadServiciosProf() {
+  if (!profDetalle) return;
+  const s = await api('/servicios?profesional_id=' + profDetalle.id);
+  document.getElementById('pd-tabla-servicios').innerHTML = s.length ? s.map(srv => `
+    <tr><td>${srv.nombre}</td><td>${srv.duracion_minutos}min</td><td class="hide-mobile">$${srv.precio}</td>
+    <td><span class="badge ${srv.activo?'badge-green':'badge-red'}">${srv.activo?'Activo':'Inactivo'}</span></td>
+    <td><div class="flex"><button class="btn btn-sm btn-secondary" onclick="editarServicio(${srv.id})">✏️</button>
+    <button class="btn btn-sm btn-danger" onclick="eliminarServicio(${srv.id})">🗑</button></div></td></tr>
+  `).join('') : `<tr><td colspan="5" class="text-muted">Sin servicios propios todavía.</td></tr>`;
+}
+
+async function loadHorariosProf() {
+  if (!profDetalle) return;
+  const h = await api('/horarios?profesional_id=' + profDetalle.id);
+  document.getElementById('pd-tabla-horarios').innerHTML = h.length ? h.map(x => `
+    <tr><td>${DIAS[x.dia_semana]}</td><td>${x.hora_inicio}</td><td>${x.hora_fin}</td>
+    <td><button class="btn btn-sm btn-danger" onclick="eliminarHorario(${x.id})">🗑</button></td></tr>
+  `).join('') : `<tr><td colspan="4" class="text-muted">Sin horarios propios definidos. Sin esto, este profesional no tendrá horarios disponibles para reservar.</td></tr>`;
+}
+
+// SERVICIOS
+async function loadServicios(){
+  const s=await api('/servicios');
+  document.getElementById('tabla-servicios').innerHTML=s.map(srv=>`
+    <tr><td>${srv.nombre}</td><td>${srv.duracion_minutos}min</td><td class="hide-mobile">$${srv.precio}</td>
+    <td class="hide-mobile">${srv.profesional_nombres&&srv.profesional_nombres.length?srv.profesional_nombres.join(', '):'<span class="text-muted">Todos</span>'}</td>
+    <td><span class="badge ${srv.activo?'badge-green':'badge-red'}">${srv.activo?'Activo':'Inactivo'}</span></td>
+    <td><div class="flex"><button class="btn btn-sm btn-secondary" onclick="editarServicio(${srv.id})">✏️</button>
+    <button class="btn btn-sm btn-danger" onclick="eliminarServicio(${srv.id})">🗑</button></div></td></tr>
+  `).join('');
+}
+
+// Mantiene en sincro la tabla global de servicios y la del profesional (si está abierta)
+function refreshServicios() { loadServicios(); if (profDetalle) loadServiciosProf(); }
+
+async function openModalServicio(forcedProfId){
+  document.getElementById('srv-id').value='';
+  document.getElementById('srv-nombre').value='';
+  document.getElementById('srv-duracion').value=30;
+  document.getElementById('srv-precio').value=0;
+  document.getElementById('srv-msg').style.display='none';
+  document.getElementById('modal-srv-title').textContent='Nuevo Servicio';
+  if (forcedProfId) {
+    document.getElementById('srv-prof-group').style.display='none';
+    document.getElementById('srv-prof-check').innerHTML=`<input type="hidden" class="srv-prof-cb" value="${forcedProfId}" checked data-forced="1">`;
+  } else if(NEGOCIO?.tipo==='multi'){
+    document.getElementById('srv-prof-group').style.display='block';
+    const profs=await api('/profesionales');
+    document.getElementById('srv-prof-check').innerHTML=profs.map(p=>`<label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" class="srv-prof-cb" value="${p.id}"> ${p.nombre}</label>`).join('');
+  } else document.getElementById('srv-prof-group').style.display='none';
+  document.getElementById('modal-servicio').classList.add('open');
+}
+
+async function editarServicio(id){
+  const srvs=await api('/servicios');const s=srvs.find(x=>x.id===id);if(!s)return;
+  await openModalServicio();
+  document.getElementById('srv-id').value=s.id;
+  document.getElementById('srv-nombre').value=s.nombre;
+  document.getElementById('srv-duracion').value=s.duracion_minutos;
+  document.getElementById('srv-precio').value=s.precio;
+  document.querySelectorAll('.srv-prof-cb').forEach(cb=>{ if(!cb.dataset.forced) cb.checked = (s.profesional_ids||[]).includes(parseInt(cb.value)); });
+  document.getElementById('modal-srv-title').textContent='Editar Servicio';
+}
+
+async function guardarServicio(){
+  const id=document.getElementById('srv-id').value;
+  const profesional_ids=[...document.querySelectorAll('.srv-prof-cb')].filter(cb=>cb.dataset.forced || cb.checked).map(cb=>parseInt(cb.value));
+  const body={nombre:document.getElementById('srv-nombre').value,duracion_minutos:document.getElementById('srv-duracion').value,precio:document.getElementById('srv-precio').value,profesional_ids,activo:1};
+  const msgEl=document.getElementById('srv-msg');
+  try{if(id)await api('/servicios/'+id,'PUT',body);else await api('/servicios','POST',body);closeModal('modal-servicio');refreshServicios();}
+  catch(e){msgEl.className='alert alert-error';msgEl.textContent=e.message;msgEl.style.display='block';}
+}
+
+async function eliminarServicio(id){if(!confirm('¿Eliminar servicio?'))return;await api('/servicios/'+id,'DELETE');refreshServicios();}
+
+// HORARIOS
+async function loadHorarios(){
+  const h=await api('/horarios');
+  if (NEGOCIO?.tipo==='multi' && !profesionales.length) profesionales = await api('/profesionales');
+  document.getElementById('tabla-horarios').innerHTML=h.map(x=>`
+    <tr><td>${DIAS[x.dia_semana]}</td><td>${x.hora_inicio}</td><td>${x.hora_fin}</td>
+    <td class="hide-mobile">${x.profesional_id?(profesionales.find(p=>p.id===x.profesional_id)?.nombre||'#'+x.profesional_id):'<span class="text-muted">Sin asignar</span>'}</td>
+    <td><button class="btn btn-sm btn-danger" onclick="eliminarHorario(${x.id})">🗑</button></td></tr>
+  `).join('');
+}
+
+// Mantiene en sincro la tabla global de horarios y la del profesional (si está abierta)
+function refreshHorarios() { loadHorarios(); if (profDetalle) loadHorariosProf(); }
+
+async function openModalHorario(forcedProfId){
+  document.querySelectorAll('#dias-check input').forEach(c=>c.checked=false);
+  document.getElementById('hor-inicio').value='09:00';
+  document.getElementById('hor-fin').value='18:00';
+  if (forcedProfId) {
+    document.getElementById('hor-prof-group').style.display='none';
+    document.getElementById('hor-profesional').innerHTML=`<option value="${forcedProfId}">${profDetalle.nombre}</option>`;
+    document.getElementById('hor-profesional').value = forcedProfId;
+  } else if(NEGOCIO?.tipo==='multi'){
+    document.getElementById('hor-prof-group').style.display='block';
+    const profs=await api('/profesionales');
+    document.getElementById('hor-profesional').innerHTML='<option value="">Todos</option>'+profs.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+  } else document.getElementById('hor-prof-group').style.display='none';
+  document.getElementById('modal-horario').classList.add('open');
+}
+
+async function guardarHorario(){
+  const dias=[...document.querySelectorAll('#dias-check input:checked')].map(c=>parseInt(c.value));
+  if(!dias.length){alert('Seleccioná al menos un día');return;}
+  const body={hora_inicio:document.getElementById('hor-inicio').value,hora_fin:document.getElementById('hor-fin').value,profesional_id:document.getElementById('hor-profesional')?.value||null};
+  for(const dia of dias) await api('/horarios','POST',{...body,dia_semana:dia});
+  closeModal('modal-horario');refreshHorarios();
+}
+
+async function eliminarHorario(id){if(!confirm('¿Eliminar horario?'))return;await api('/horarios/'+id,'DELETE');refreshHorarios();}
+
+// CLIENTES
+async function loadClientes(){
+  const c=await api('/clientes');
+  document.getElementById('tabla-clientes').innerHTML=c.map(x=>`
+    <tr><td>${x.nombre} ${x.apellido}</td><td>${x.dni||'—'}</td>
+    <td class="hide-mobile">${x.telefono||'—'}</td>
+    <td><span class="badge badge-blue">${x.total_turnos}</span></td></tr>
+  `).join('');
+}
+
+// MENSAJES
+async function loadMensajesAdmin(){
+  mensajes=await api('/mensajes');
+  const confirmacion = mensajes.find(m=>m.tipo==='confirmacion');
+  const cancelacion = mensajes.find(m=>m.tipo==='cancelacion');
+  const recordatorios = mensajes.filter(m=>m.tipo==='recordatorio');
+
+  document.getElementById('msg-confirmacion').innerHTML = confirmacion ? `
+    <div class="card" style="margin-bottom:10px">
+      <div class="flex-between">
+        <span class="badge ${confirmacion.activo?'badge-green':'badge-red'}">${confirmacion.activo?'Activo':'Inactivo'}</span>
+        <div class="flex">
+          <button class="btn btn-sm btn-secondary" onclick="editarMsg(${confirmacion.id})">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="eliminarMsg(${confirmacion.id})">🗑</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;padding:8px;background:#0f172a;border-radius:6px;font-size:.8rem;color:var(--muted);white-space:pre-wrap">${confirmacion.mensaje}</div>
+    </div>
+  ` : `
+    <div class="card" style="margin-bottom:10px">
+      <p class="text-muted" style="margin-bottom:10px">No hay mensaje de confirmación configurado: no se enviará nada al reservar un turno.</p>
+      <button class="btn btn-primary btn-sm" onclick="openModalMsg('confirmacion')">+ Crear mensaje de confirmación</button>
+    </div>`;
+
+  document.getElementById('msg-cancelacion').innerHTML = cancelacion ? `
+    <div class="card" style="margin-bottom:10px">
+      <div class="flex-between">
+        <span class="badge ${cancelacion.activo?'badge-green':'badge-red'}">${cancelacion.activo?'Activo':'Inactivo'}</span>
+        <div class="flex">
+          <button class="btn btn-sm btn-secondary" onclick="editarMsg(${cancelacion.id})">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="eliminarMsg(${cancelacion.id})">🗑</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;padding:8px;background:#0f172a;border-radius:6px;font-size:.8rem;color:var(--muted);white-space:pre-wrap">${cancelacion.mensaje}</div>
+    </div>
+  ` : `
+    <div class="card" style="margin-bottom:10px">
+      <p class="text-muted" style="margin-bottom:10px">No hay mensaje de cancelación configurado: no se enviará nada al cancelar un turno.</p>
+      <button class="btn btn-primary btn-sm" onclick="openModalMsg('cancelacion')">+ Crear mensaje de cancelación</button>
+    </div>`;
+
+  const recEl = document.getElementById('msg-recordatorios');
+  if (!recordatorios.length) { recEl.innerHTML = '<p class="text-muted">Sin recordatorios configurados.</p>'; return; }
+  recEl.innerHTML = recordatorios.map(m=>`
+    <div class="card" style="margin-bottom:10px">
+      <div class="flex-between">
+        <div><strong>${m.dias_antes} ${m.unidad==='horas'?('hora'+(m.dias_antes==1?'':'s')):('día'+(m.dias_antes==1?'':'s'))} antes</strong>
+        <span class="badge ${m.activo?'badge-green':'badge-red'}" style="margin-left:8px">${m.activo?'Activo':'Inactivo'}</span></div>
+        <div class="flex">
+          <button class="btn btn-sm btn-secondary" onclick="editarMsg(${m.id})">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="eliminarMsg(${m.id})">🗑</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;padding:8px;background:#0f172a;border-radius:6px;font-size:.8rem;color:var(--muted);white-space:pre-wrap">${m.mensaje}</div>
+    </div>
+  `).join('');
+}
+
+function actualizarCamposMsg(){
+  const tipo = document.getElementById('msg-tipo').value;
+  document.getElementById('msg-recordatorio-fields').style.display = tipo==='recordatorio' ? 'flex' : 'none';
+  const unidad = document.getElementById('msg-unidad').value;
+  document.getElementById('msg-hora-group').style.display = (tipo==='recordatorio' && unidad==='dias') ? 'block' : 'none';
+}
+
+function openModalMsg(tipo){
+  document.getElementById('msg-id').value='';
+  document.getElementById('msg-tipo').value=tipo;
+  document.getElementById('msg-activo').value='1';
+  document.getElementById('msg-texto').value = tipo==='confirmacion'
+    ? '✅ *{{nombre}}*, tu turno quedó confirmado para el *{{fecha}}* a las *{{hora}}*. ¡Hasta pronto!'
+    : tipo==='cancelacion'
+    ? '❌ Hola *{{nombre}}*, tu turno del *{{fecha}}* a las *{{hora}}* fue cancelado.'
+    : '👋 Hola *{{nombre}}*! Te recordamos tu turno el *{{fecha}}* a las *{{hora}}*. ¡Te esperamos! 🗓️';
+  document.getElementById('msg-hora').value='09:00';
+  document.getElementById('msg-unidad').value='dias';
+  document.getElementById('msg-dias').value = tipo==='recordatorio' ? 1 : 0;
+  actualizarCamposMsg();
+  document.getElementById('modal-msg-title').textContent = tipo==='confirmacion' ? 'Nuevo mensaje de confirmación' : tipo==='cancelacion' ? 'Nuevo mensaje de cancelación' : 'Nuevo recordatorio';
+  document.getElementById('msg-form-error').style.display='none';
+  document.getElementById('modal-msg').classList.add('open');
+}
+
+function editarMsg(id){
+  const m=mensajes.find(x=>x.id===id);if(!m)return;
+  document.getElementById('msg-id').value=m.id;
+  document.getElementById('msg-tipo').value=m.tipo;
+  document.getElementById('msg-activo').value=m.activo?'1':'0';
+  document.getElementById('msg-texto').value=m.mensaje;
+  document.getElementById('msg-hora').value=m.hora_envio||'09:00';
+  document.getElementById('msg-dias').value=m.dias_antes;
+  document.getElementById('msg-unidad').value=m.unidad==='horas'?'horas':'dias';
+  actualizarCamposMsg();
+  document.getElementById('modal-msg-title').textContent = m.tipo==='confirmacion' ? 'Editar mensaje de confirmación' : m.tipo==='cancelacion' ? 'Editar mensaje de cancelación' : 'Editar recordatorio';
+  document.getElementById('msg-form-error').style.display='none';
+  document.getElementById('modal-msg').classList.add('open');
+}
+
+async function guardarMsg(){
+  const id=document.getElementById('msg-id').value;
+  const body={
+    tipo: document.getElementById('msg-tipo').value,
+    activo: document.getElementById('msg-activo').value==='1',
+    mensaje: document.getElementById('msg-texto').value,
+    hora_envio: document.getElementById('msg-hora').value,
+    dias_antes: parseInt(document.getElementById('msg-dias').value)||0,
+    unidad: document.getElementById('msg-unidad').value
+  };
+  const errEl=document.getElementById('msg-form-error');
+  try{
+    if(id) await api('/mensajes/'+id,'PUT',body);
+    else await api('/mensajes','POST',body);
+    closeModal('modal-msg');
+    loadMensajesAdmin();
+  } catch(e){ errEl.className='alert alert-error'; errEl.textContent=e.message; errEl.style.display='block'; }
+}
+
+async function eliminarMsg(id){
+  const m = mensajes.find(x=>x.id===id);
+  const advertencia = m?.tipo==='confirmacion'
+    ? '¿Eliminar el mensaje de confirmación? Dejará de enviarse automáticamente al reservar un turno.'
+    : '¿Eliminar este recordatorio?';
+  if(!confirm(advertencia)) return;
+  await api('/mensajes/'+id,'DELETE');
+  loadMensajesAdmin();
+}
+
+async function loadLogs(){
+  const logs=await api('/logs');
+  const c=document.getElementById('logs-container');
+  if(!logs.length){c.innerHTML='<p class="text-muted">Sin historial aún.</p>';return;}
+  c.innerHTML=logs.map(l=>`
+    <div class="log-item">
+      <div class="flex-between">
+        <span><strong>${l.tipo}</strong> → ${l.destinatario}</span>
+        <span class="text-muted">${new Date(l.sent_at).toLocaleString('es-AR')}</span>
+      </div>
+      <div style="color:var(--muted);margin-top:2px">${(l.mensaje||'').substring(0,100)}</div>
+    </div>
+  `).join('');
+}
+
+// WHATSAPP
+async function checkWAEstado() {
+  try {
+    const s = await api('/whatsapp/estado');
+    const dot = document.getElementById('wa-dot');
+    const txt = document.getElementById('wa-text');
+    const phone = document.getElementById('wa-phone');
+    const btnConn = document.getElementById('btn-conectar');
+    const btnDisc = document.getElementById('btn-desconectar');
+    if (s.connected) {
+      dot.className='dot on'; txt.textContent='✅ Conectado';
+      phone.textContent = s.phone ? '📞 ' + s.phone : '';
+      btnConn.style.display='none'; btnDisc.style.display='block';
+      document.getElementById('qr-container').style.display='none';
+    } else {
+      dot.className='dot';
+      btnConn.style.display='block'; btnDisc.style.display='none';
+      if (s.error && !s.hasQR) {
+        txt.textContent='❌ Error al conectar';
+        phone.textContent = s.error;
+        document.getElementById('qr-container').style.display='none';
+        btnConn.textContent = '📱 Reintentar conexión';
+        btnConn.disabled = false;
+      } else if (!s.hasQR) {
+        txt.textContent='❌ Desconectado'; phone.textContent='';
+        btnConn.textContent = '📱 Conectar WhatsApp';
+        btnConn.disabled = false;
+      }
+    }
+  } catch {}
+}
+
+async function conectarWA() {
+  const btn = document.getElementById('btn-conectar');
+  btn.textContent='Iniciando...'; btn.disabled=true;
+  try {
+    await api('/whatsapp/conectar','POST');
+    if (waStream) waStream.close();
+    waStream = new EventSource('/api/admin/whatsapp/qr-stream?token='+TOKEN);
+    waStream.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.qr) {
+        document.getElementById('qr-img').src = data.qr;
+        document.getElementById('qr-container').style.display = 'block';
+        btn.textContent='Esperando escaneo...'; btn.disabled=true;
+      }
+      if (data.connected) {
+        waStream.close(); waStream=null;
+        document.getElementById('qr-container').style.display='none';
+        btn.textContent='📱 Conectar WhatsApp'; btn.disabled=false;
+        checkWAEstado();
+      }
+      if (data.error) {
+        if(waStream){waStream.close();waStream=null;}
+        document.getElementById('qr-container').style.display='none';
+        btn.textContent='📱 Reintentar conexión'; btn.disabled=false;
+        checkWAEstado();
+      }
+    };
+    waStream.onerror = () => {
+      if(waStream){waStream.close();waStream=null;}
+      btn.textContent='📱 Conectar WhatsApp'; btn.disabled=false;
+    };
+  } catch(e) {
+    alert('Error: '+e.message);
+    btn.textContent='📱 Conectar WhatsApp'; btn.disabled=false;
+  }
+}
+
+async function desconectarWA() {
+  if(!confirm('¿Desconectar WhatsApp?')) return;
+  await api('/whatsapp/desconectar','POST');
+  if(waStream){waStream.close();waStream=null;}
+  checkWAEstado();
+}
+
+</script>
+</body>
+</html>
