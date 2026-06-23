@@ -94,6 +94,7 @@
   <div class="nav-items">
     <div class="nav-item active" data-page="negocios" onclick="showPage('negocios', event)">🏢 Negocios</div>
     <div class="nav-item" data-page="cuenta" onclick="showPage('cuenta', event)">🔐 Mi Cuenta</div>
+    <div class="nav-item" data-page="backup" onclick="showPage('backup', event)">💾 Backup</div>
   </div>
   <div class="sidebar-footer">
     <div class="nav-item" onclick="logout()">🚪 Salir</div>
@@ -122,6 +123,23 @@
     <div class="form-group"><label>Confirmar nueva</label><input type="password" id="pass-conf" /></div>
     <div id="pass-msg" style="display:none;margin-bottom:10px"></div>
     <button class="btn btn-primary" onclick="cambiarPass()">💾 Cambiar contraseña</button>
+  </div>
+</div>
+
+<!-- BACKUP -->
+<div id="page-backup" class="page">
+  <div class="page-header"><h1>Backup</h1></div>
+  <div class="card" style="max-width:500px;margin-bottom:16px">
+    <div class="card-title" style="margin-bottom:8px">⬇️ Descargar backup completo</div>
+    <p class="text-muted" style="margin-bottom:12px">Descarga un único archivo con TODOS los datos: negocios, clientes, turnos, historial de mensajes y sesiones de WhatsApp. Guardalo en un lugar seguro.</p>
+    <button class="btn btn-primary" onclick="descargarBackup()">⬇️ Descargar backup</button>
+  </div>
+  <div class="card" style="max-width:500px">
+    <div class="card-title" style="margin-bottom:8px">⬆️ Restaurar backup</div>
+    <p class="text-muted" style="margin-bottom:12px">Subí un archivo de backup descargado previamente desde acá. <strong>Esto reemplaza TODOS los datos actuales</strong> por los del backup, y reinicia el servidor. No se puede deshacer.</p>
+    <input type="file" id="restore-file" accept=".db" style="margin-bottom:10px" />
+    <div id="restore-msg" style="display:none;margin-bottom:10px"></div>
+    <button class="btn btn-danger" onclick="restaurarBackup()">⬆️ Restaurar backup</button>
   </div>
 </div>
 
@@ -187,6 +205,34 @@ async function doLogin() {
 document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 
 function logout() { TOKEN=''; location.reload(); }
+
+function descargarBackup() {
+  // Usamos un link temporal con el token en query, ya que el navegador no puede mandar
+  // el header Authorization en una descarga directa de archivo.
+  window.open('/api/superadmin/backup?token=' + encodeURIComponent(TOKEN), '_blank');
+}
+
+async function restaurarBackup() {
+  const input = document.getElementById('restore-file');
+  const msgEl = document.getElementById('restore-msg');
+  msgEl.style.display = 'none';
+  if (!input.files.length) { alert('Elegí un archivo de backup primero'); return; }
+  if (!confirm('¿Seguro que querés restaurar este backup? Se van a borrar TODOS los datos actuales y reemplazar por los del archivo. Esta acción no se puede deshacer.')) return;
+  const fd = new FormData();
+  fd.append('backup', input.files[0]);
+  try {
+    const r = await fetch('/api/superadmin/restore', { method:'POST', headers:{ 'Authorization':'Bearer '+TOKEN }, body: fd });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Error al restaurar');
+    msgEl.className = 'alert alert-success';
+    msgEl.textContent = data.message || 'Backup restaurado. El servidor se está reiniciando...';
+    msgEl.style.display = 'block';
+  } catch(e) {
+    msgEl.className = 'alert alert-error';
+    msgEl.textContent = e.message;
+    msgEl.style.display = 'block';
+  }
+}
 
 function showPage(p, ev) {
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));

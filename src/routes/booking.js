@@ -129,6 +129,21 @@ router.post('/turno/:slug', async (req, res) => {
     }
   }
 
+  // Avisar al profesional asignado para que confirme el turno
+  if (profesional_id) {
+    const prof = db.prepare('SELECT nombre, telefono FROM profesionales WHERE id=? AND negocio_id=?').get(profesional_id, n.id);
+    if (prof?.telefono) {
+      const msgAviso = db.prepare("SELECT * FROM mensajes_config WHERE negocio_id=? AND tipo='aviso_profesional' AND activo=1").get(n.id);
+      if (msgAviso) {
+        const servicio = servicio_id ? db.prepare('SELECT nombre FROM servicios WHERE id=?').get(servicio_id) : null;
+        const msgProf = reemplazarVariables(msgAviso.mensaje, { nombre: nombreCompleto, fecha, hora, servicio: servicio?.nombre || '', profesional: prof.nombre, negocio: n.nombre });
+        await enviarMensaje(n.id, prof.telefono, msgProf).catch(() => {});
+        db.prepare("INSERT INTO mensajes_log (negocio_id, turno_id, tipo, destinatario, mensaje, estado) VALUES (?,?,?,?,?,?)")
+          .run(n.id, result.lastInsertRowid, 'aviso_profesional', prof.telefono, msgProf, 'enviado');
+      }
+    }
+  }
+
   res.json({ id: result.lastInsertRowid, message: 'Turno reservado exitosamente' });
 });
 

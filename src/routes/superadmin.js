@@ -53,6 +53,7 @@ router.post('/negocios', authSuperadmin, async (req, res) => {
     const negocioId = result.lastInsertRowid;
     db.prepare("INSERT INTO mensajes_config (negocio_id, tipo, mensaje, hora_envio, dias_antes) VALUES (?, 'recordatorio', '👋 Hola *{{nombre}}*! Te recordamos tu turno mañana *{{fecha}}* a las *{{hora}}*. ¡Te esperamos! 🗓️', '09:00', 1)").run(negocioId);
     db.prepare("INSERT INTO mensajes_config (negocio_id, tipo, mensaje, hora_envio, dias_antes) VALUES (?, 'confirmacion', '✅ *{{nombre}}*, tu turno quedó confirmado para el *{{fecha}}* a las *{{hora}}*. ¡Hasta pronto!', '09:00', 0)").run(negocioId);
+    db.prepare("INSERT INTO mensajes_config (negocio_id, tipo, mensaje, hora_envio, dias_antes) VALUES (?, 'aviso_profesional', '📅 Hola *{{profesional}}*! Tenés un nuevo turno asignado:\n\n👤 Cliente: {{nombre}}\n🗓️ Fecha: {{fecha}}\n🕐 Hora: {{hora}}\n\nPor favor confirmá la disponibilidad.', '09:00', 0)").run(negocioId);
     res.json({ id: negocioId, token, fecha_vencimiento: fechaVencimiento });
   } catch(e) {
     if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'El slug ya existe' });
@@ -137,6 +138,42 @@ router.get('/whatsapp/qr-stream', (req, res) => {
 router.post('/whatsapp/desconectar', authSuperadmin, (req, res) => {
   desconectar(SA_ID);
   res.json({ ok: true });
+});
+
+// ============ Backup / Restore ============
+const fs = require('fs');
+const multer = require('multer');
+const { DB_PATH, forceSave } = require('../models/database');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
+
+router.get('/backup', (req, res) => {
+  try {
+    const token = req.query.token || (req.headers.authorization || '').replace('Bearer ', '');
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.role !== 'superadmin') return res.status(403).end();
+  } catch { return res.status(401).end(); }
+  forceSave(); // aseguramos que lo último en memoria esté escrito en el archivo antes de descargar
+  const fecha = new Date().toISOString().split('T')[0];
+  res.download(DB_PATH, `turnosapp-backup-${fecha}.db`);
+});
+
+router.post('/restore', authSuperadmin, upload.single('backup'), (req, res) => {
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: 'No se recibió ningún archivo' });
+  // Validar que sea un archivo SQLite real (header estándar de 16 bytes)
+  const header = file.buffer.slice(0, 16).toString('utf8');
+  if (header !== 'SQLite format 3\u0000') {
+    return res.status(400).json({ error: 'El archivo no es un backup válido de TurnosApp (no es una base SQLite)' });
+  }
+  try {
+    fs.writeFileSync(DB_PATH, file.buffer);
+  } catch (e) {
+    return res.status(500).json({ error: 'No se pudo escribir el archivo: ' + e.message });
+  }
+  res.json({ ok: true, message: 'Backup restaurado. El servidor se va a reiniciar en unos segundos para aplicar los cambios.' });
+  // Reiniciamos el proceso para que cargue la base nueva desde cero.
+  // PM2 lo levanta automáticamente (autorestart por defecto).
+  setTimeout(() => process.exit(0), 1000);
 });
 
 module.exports = router;

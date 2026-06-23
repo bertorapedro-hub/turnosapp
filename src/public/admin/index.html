@@ -95,6 +95,11 @@ tr:last-child td{border-bottom:none}
 
 /* BADGES */
 .badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:.72rem;font-weight:500;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:.82rem;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;user-select:none;transition:all .12s}
+.chip:hover{border-color:var(--accent)}
+.chip.selected{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip .chip-tick{display:none;font-size:.78rem}
+.chip.selected .chip-tick{display:inline}
 .badge-green{background:rgba(16,185,129,.15);color:var(--green)}
 .badge-red{background:rgba(239,68,68,.15);color:var(--red)}
 .badge-yellow{background:rgba(245,158,11,.15);color:var(--yellow)}
@@ -262,8 +267,14 @@ tr:last-child td{border-bottom:none}
       <div class="page-header"><h1>📋 Todos los turnos</h1><button class="btn btn-primary btn-sm" onclick="openModalTurno()">+ Nuevo</button></div>
       <div class="card">
         <div class="flex flex-wrap-mobile" style="margin-bottom:12px;gap:8px">
-          <input type="date" id="filtro-desde" style="flex:1;min-width:130px" />
-          <input type="date" id="filtro-hasta" style="flex:1;min-width:130px" />
+          <div style="flex:1;min-width:130px">
+            <label style="display:block;font-size:.75rem;color:var(--muted);margin-bottom:2px">Desde</label>
+            <input type="date" id="filtro-desde" style="width:100%" />
+          </div>
+          <div style="flex:1;min-width:130px">
+            <label style="display:block;font-size:.75rem;color:var(--muted);margin-bottom:2px">Hasta</label>
+            <input type="date" id="filtro-hasta" style="width:100%" />
+          </div>
           <select id="filtro-profesional" style="display:none;flex:1;min-width:150px"><option value="">Todos los profesionales</option></select>
           <button class="btn btn-secondary btn-sm" onclick="loadTurnos()">Filtrar</button>
         </div>
@@ -367,7 +378,7 @@ tr:last-child td{border-bottom:none}
           <div class="tab" onclick="showTab(this,'msgt','historial');loadLogs()">Historial</div>
         </div>
         <div id="msgt-config" class="tab-content active">
-          <p class="text-muted" style="margin-bottom:16px">Variables: <code>{{nombre}}</code> <code>{{fecha}}</code> <code>{{hora}}</code> <code>{{servicio}}</code> <code>{{profesional}}</code> <code>{{negocio}}</code></p>
+          <p class="text-muted" style="margin-bottom:16px">Al editar un mensaje vas a poder tocar variables como "Nombre cliente" o "Nombre profesional" para insertarlas automáticamente.</p>
 
           <div class="card-title" style="margin-bottom:8px">✅ Confirmación de turno</div>
           <p class="text-muted" style="margin-bottom:10px">Se envía apenas se reserva un turno (online o desde el panel).</p>
@@ -376,6 +387,10 @@ tr:last-child td{border-bottom:none}
           <div class="card-title" style="margin-bottom:8px">❌ Cancelación de turno</div>
           <p class="text-muted" style="margin-bottom:10px">Se envía cuando el turno pasa a estado cancelado.</p>
           <div id="msg-cancelacion" style="margin-bottom:20px"></div>
+
+          <div class="card-title" style="margin-bottom:8px">🧑‍💼 Aviso al profesional</div>
+          <p class="text-muted" style="margin-bottom:10px">Se envía al profesional asignado para que confirme el turno (online o desde el panel).</p>
+          <div id="msg-aviso-profesional" style="margin-bottom:20px"></div>
 
           <div class="flex-between" style="margin-bottom:8px">
             <div class="card-title">📅 Recordatorios</div>
@@ -516,20 +531,21 @@ tr:last-child td{border-bottom:none}
 <div class="modal-bg" id="modal-horario">
   <div class="modal">
     <h2>Nuevo Horario</h2>
+    <input type="hidden" id="hor-forced-prof" />
     <div id="hor-prof-group" class="form-group" style="display:none">
-      <label>Profesional</label>
-      <select id="hor-profesional"><option value="">Todos</option></select>
+      <label>Profesional(es) <span class="text-muted" style="font-size:.75rem">(podés elegir varios, o "Todos")</span></label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px" id="hor-prof-check"></div>
     </div>
     <div class="form-group">
-      <label>Días</label>
+      <label>Días <span class="text-muted" style="font-size:.75rem">(podés elegir varios a la vez)</span></label>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px" id="dias-check">
-        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="1"> Lun</label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="2"> Mar</label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="3"> Mié</label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="4"> Jue</label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="5"> Vie</label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="6"> Sáb</label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" value="0"> Dom</label>
+        <label class="chip"><input type="checkbox" value="1" style="display:none" onchange="this.parentElement.classList.toggle('selected', this.checked)"><span class="chip-tick">✓</span> Lun</label>
+        <label class="chip"><input type="checkbox" value="2" style="display:none" onchange="this.parentElement.classList.toggle('selected', this.checked)"><span class="chip-tick">✓</span> Mar</label>
+        <label class="chip"><input type="checkbox" value="3" style="display:none" onchange="this.parentElement.classList.toggle('selected', this.checked)"><span class="chip-tick">✓</span> Mié</label>
+        <label class="chip"><input type="checkbox" value="4" style="display:none" onchange="this.parentElement.classList.toggle('selected', this.checked)"><span class="chip-tick">✓</span> Jue</label>
+        <label class="chip"><input type="checkbox" value="5" style="display:none" onchange="this.parentElement.classList.toggle('selected', this.checked)"><span class="chip-tick">✓</span> Vie</label>
+        <label class="chip"><input type="checkbox" value="6" style="display:none" onchange="this.parentElement.classList.toggle('selected', this.checked)"><span class="chip-tick">✓</span> Sáb</label>
+        <label class="chip"><input type="checkbox" value="0" style="display:none" onchange="this.parentElement.classList.toggle('selected', this.checked)"><span class="chip-tick">✓</span> Dom</label>
       </div>
     </div>
     <div class="flex flex-wrap-mobile" style="gap:8px">
@@ -554,6 +570,7 @@ tr:last-child td{border-bottom:none}
     </div>
     <div class="form-group"><label>Mensaje</label>
       <textarea id="msg-texto" rows="5" style="resize:vertical;font-family:inherit"></textarea>
+      <div class="flex flex-wrap-mobile" style="gap:6px;margin-top:6px" id="msg-vars-buttons"></div>
     </div>
     <div id="msg-recordatorio-fields" class="flex flex-wrap-mobile" style="gap:8px">
       <div class="form-group" style="flex:1"><label>Cantidad</label><input type="number" id="msg-dias" min="0" /></div>
@@ -1077,7 +1094,7 @@ async function openModalServicio(forcedProfId){
   } else if(NEGOCIO?.tipo==='multi'){
     document.getElementById('srv-prof-group').style.display='block';
     const profs=await api('/profesionales');
-    document.getElementById('srv-prof-check').innerHTML=profs.map(p=>`<label style="display:flex;align-items:center;gap:4px;font-size:.85rem;cursor:pointer"><input type="checkbox" class="srv-prof-cb" value="${p.id}"> ${p.nombre}</label>`).join('');
+    document.getElementById('srv-prof-check').innerHTML=profs.map(p=>`<label class="chip"><input type="checkbox" class="srv-prof-cb" value="${p.id}" style="display:none" onchange="this.parentElement.classList.toggle('selected', this.checked)"><span class="chip-tick">✓</span> ${p.nombre}</label>`).join('');
   } else document.getElementById('srv-prof-group').style.display='none';
   document.getElementById('modal-servicio').classList.add('open');
 }
@@ -1089,7 +1106,12 @@ async function editarServicio(id){
   document.getElementById('srv-nombre').value=s.nombre;
   document.getElementById('srv-duracion').value=s.duracion_minutos;
   document.getElementById('srv-precio').value=s.precio;
-  document.querySelectorAll('.srv-prof-cb').forEach(cb=>{ if(!cb.dataset.forced) cb.checked = (s.profesional_ids||[]).includes(parseInt(cb.value)); });
+  document.querySelectorAll('.srv-prof-cb').forEach(cb=>{
+    if(cb.dataset.forced) return;
+    const sel = (s.profesional_ids||[]).includes(parseInt(cb.value));
+    cb.checked = sel;
+    cb.parentElement.classList.toggle('selected', sel);
+  });
   document.getElementById('modal-srv-title').textContent='Editar Servicio';
 }
 
@@ -1119,26 +1141,45 @@ async function loadHorarios(){
 function refreshHorarios() { loadHorarios(); if (profDetalle) loadHorariosProf(); }
 
 async function openModalHorario(forcedProfId){
-  document.querySelectorAll('#dias-check input').forEach(c=>c.checked=false);
+  document.querySelectorAll('#dias-check input').forEach(c=>{c.checked=false; c.parentElement.classList.remove('selected');});
   document.getElementById('hor-inicio').value='09:00';
   document.getElementById('hor-fin').value='18:00';
+  document.getElementById('hor-forced-prof').value = forcedProfId || '';
   if (forcedProfId) {
     document.getElementById('hor-prof-group').style.display='none';
-    document.getElementById('hor-profesional').innerHTML=`<option value="${forcedProfId}">${profDetalle.nombre}</option>`;
-    document.getElementById('hor-profesional').value = forcedProfId;
   } else if(NEGOCIO?.tipo==='multi'){
     document.getElementById('hor-prof-group').style.display='block';
     const profs=await api('/profesionales');
-    document.getElementById('hor-profesional').innerHTML='<option value="">Todos</option>'+profs.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+    const todosChip = `<label class="chip selected" id="hor-todos-label"><input type="checkbox" id="hor-todos" style="display:none" checked onchange="onHorTodosChange()"><span class="chip-tick">✓</span> Todos</label>`;
+    const profsHtml = profs.map(p=>`<label class="chip"><input type="checkbox" class="hor-prof-cb" value="${p.id}" style="display:none" onchange="onHorProfChange(this)"><span class="chip-tick">✓</span> ${p.nombre}</label>`).join('');
+    document.getElementById('hor-prof-check').innerHTML = todosChip + profsHtml;
   } else document.getElementById('hor-prof-group').style.display='none';
   document.getElementById('modal-horario').classList.add('open');
+}
+
+// "Todos" y profesionales puntuales son mutuamente excluyentes: elegir uno deselecciona el otro grupo
+function onHorTodosChange(){
+  const todos=document.getElementById('hor-todos');
+  todos.parentElement.classList.toggle('selected', todos.checked);
+  if(todos.checked) document.querySelectorAll('.hor-prof-cb').forEach(cb=>{cb.checked=false; cb.parentElement.classList.remove('selected');});
+}
+function onHorProfChange(cb){
+  cb.parentElement.classList.toggle('selected', cb.checked);
+  if(cb.checked){ const todos=document.getElementById('hor-todos'); todos.checked=false; todos.parentElement.classList.remove('selected'); }
 }
 
 async function guardarHorario(){
   const dias=[...document.querySelectorAll('#dias-check input:checked')].map(c=>parseInt(c.value));
   if(!dias.length){alert('Seleccioná al menos un día');return;}
-  const body={hora_inicio:document.getElementById('hor-inicio').value,hora_fin:document.getElementById('hor-fin').value,profesional_id:document.getElementById('hor-profesional')?.value||null};
-  for(const dia of dias) await api('/horarios','POST',{...body,dia_semana:dia});
+  const forced = document.getElementById('hor-forced-prof').value;
+  let profIds;
+  if (forced) profIds = [forced];
+  else {
+    const elegidos = [...document.querySelectorAll('.hor-prof-cb:checked')].map(c=>c.value);
+    profIds = elegidos.length ? elegidos : [null]; // sin elegidos puntuales = "Todos"
+  }
+  const body={hora_inicio:document.getElementById('hor-inicio').value,hora_fin:document.getElementById('hor-fin').value};
+  for(const dia of dias) for(const pid of profIds) await api('/horarios','POST',{...body,dia_semana:dia,profesional_id:pid});
   closeModal('modal-horario');refreshHorarios();
 }
 
@@ -1155,10 +1196,35 @@ async function loadClientes(){
 }
 
 // MENSAJES
+const VARS_MSG = [
+  { v: 'nombre', label: 'Nombre cliente' },
+  { v: 'profesional', label: 'Nombre profesional' },
+  { v: 'fecha', label: 'Fecha' },
+  { v: 'hora', label: 'Hora' },
+  { v: 'servicio', label: 'Servicio' },
+  { v: 'negocio', label: 'Negocio' },
+];
+function renderMsgVarsButtons(){
+  document.getElementById('msg-vars-buttons').innerHTML = VARS_MSG.map(x=>
+    `<button type="button" class="btn btn-secondary btn-sm" onclick="insertarVariableMsg('${x.v}')">${x.label}</button>`
+  ).join('');
+}
+function insertarVariableMsg(v){
+  const ta = document.getElementById('msg-texto');
+  const texto = `{{${v}}}`;
+  const inicio = ta.selectionStart ?? ta.value.length;
+  const fin = ta.selectionEnd ?? ta.value.length;
+  ta.value = ta.value.slice(0, inicio) + texto + ta.value.slice(fin);
+  ta.focus();
+  const nuevaPos = inicio + texto.length;
+  ta.setSelectionRange(nuevaPos, nuevaPos);
+}
+
 async function loadMensajesAdmin(){
   mensajes=await api('/mensajes');
   const confirmacion = mensajes.find(m=>m.tipo==='confirmacion');
   const cancelacion = mensajes.find(m=>m.tipo==='cancelacion');
+  const avisoProf = mensajes.find(m=>m.tipo==='aviso_profesional');
   const recordatorios = mensajes.filter(m=>m.tipo==='recordatorio');
 
   document.getElementById('msg-confirmacion').innerHTML = confirmacion ? `
@@ -1195,6 +1261,23 @@ async function loadMensajesAdmin(){
       <button class="btn btn-primary btn-sm" onclick="openModalMsg('cancelacion')">+ Crear mensaje de cancelación</button>
     </div>`;
 
+  document.getElementById('msg-aviso-profesional').innerHTML = avisoProf ? `
+    <div class="card" style="margin-bottom:10px">
+      <div class="flex-between">
+        <span class="badge ${avisoProf.activo?'badge-green':'badge-red'}">${avisoProf.activo?'Activo':'Inactivo'}</span>
+        <div class="flex">
+          <button class="btn btn-sm btn-secondary" onclick="editarMsg(${avisoProf.id})">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="eliminarMsg(${avisoProf.id})">🗑</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;padding:8px;background:#0f172a;border-radius:6px;font-size:.8rem;color:var(--muted);white-space:pre-wrap">${avisoProf.mensaje}</div>
+    </div>
+  ` : `
+    <div class="card" style="margin-bottom:10px">
+      <p class="text-muted" style="margin-bottom:10px">No hay mensaje configurado: el profesional no recibirá aviso de turnos nuevos.</p>
+      <button class="btn btn-primary btn-sm" onclick="openModalMsg('aviso_profesional')">+ Crear mensaje de aviso al profesional</button>
+    </div>`;
+
   const recEl = document.getElementById('msg-recordatorios');
   if (!recordatorios.length) { recEl.innerHTML = '<p class="text-muted">Sin recordatorios configurados.</p>'; return; }
   recEl.innerHTML = recordatorios.map(m=>`
@@ -1227,12 +1310,15 @@ function openModalMsg(tipo){
     ? '✅ *{{nombre}}*, tu turno quedó confirmado para el *{{fecha}}* a las *{{hora}}*. ¡Hasta pronto!'
     : tipo==='cancelacion'
     ? '❌ Hola *{{nombre}}*, tu turno del *{{fecha}}* a las *{{hora}}* fue cancelado.'
+    : tipo==='aviso_profesional'
+    ? '📅 Hola *{{profesional}}*! Tenés un nuevo turno asignado:\n\n👤 Cliente: {{nombre}}\n🗓️ Fecha: {{fecha}}\n🕐 Hora: {{hora}}\n\nPor favor confirmá la disponibilidad.'
     : '👋 Hola *{{nombre}}*! Te recordamos tu turno el *{{fecha}}* a las *{{hora}}*. ¡Te esperamos! 🗓️';
   document.getElementById('msg-hora').value='09:00';
   document.getElementById('msg-unidad').value='dias';
   document.getElementById('msg-dias').value = tipo==='recordatorio' ? 1 : 0;
   actualizarCamposMsg();
-  document.getElementById('modal-msg-title').textContent = tipo==='confirmacion' ? 'Nuevo mensaje de confirmación' : tipo==='cancelacion' ? 'Nuevo mensaje de cancelación' : 'Nuevo recordatorio';
+  renderMsgVarsButtons();
+  document.getElementById('modal-msg-title').textContent = tipo==='confirmacion' ? 'Nuevo mensaje de confirmación' : tipo==='cancelacion' ? 'Nuevo mensaje de cancelación' : tipo==='aviso_profesional' ? 'Nuevo mensaje de aviso al profesional' : 'Nuevo recordatorio';
   document.getElementById('msg-form-error').style.display='none';
   document.getElementById('modal-msg').classList.add('open');
 }
@@ -1247,7 +1333,8 @@ function editarMsg(id){
   document.getElementById('msg-dias').value=m.dias_antes;
   document.getElementById('msg-unidad').value=m.unidad==='horas'?'horas':'dias';
   actualizarCamposMsg();
-  document.getElementById('modal-msg-title').textContent = m.tipo==='confirmacion' ? 'Editar mensaje de confirmación' : m.tipo==='cancelacion' ? 'Editar mensaje de cancelación' : 'Editar recordatorio';
+  renderMsgVarsButtons();
+  document.getElementById('modal-msg-title').textContent = m.tipo==='confirmacion' ? 'Editar mensaje de confirmación' : m.tipo==='cancelacion' ? 'Editar mensaje de cancelación' : m.tipo==='aviso_profesional' ? 'Editar mensaje de aviso al profesional' : 'Editar recordatorio';
   document.getElementById('msg-form-error').style.display='none';
   document.getElementById('modal-msg').classList.add('open');
 }
@@ -1275,6 +1362,8 @@ async function eliminarMsg(id){
   const m = mensajes.find(x=>x.id===id);
   const advertencia = m?.tipo==='confirmacion'
     ? '¿Eliminar el mensaje de confirmación? Dejará de enviarse automáticamente al reservar un turno.'
+    : m?.tipo==='aviso_profesional'
+    ? '¿Eliminar el mensaje de aviso al profesional? Dejará de avisarle cuando se le asigne un turno nuevo.'
     : '¿Eliminar este recordatorio?';
   if(!confirm(advertencia)) return;
   await api('/mensajes/'+id,'DELETE');

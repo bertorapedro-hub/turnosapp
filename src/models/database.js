@@ -185,8 +185,18 @@ async function initDb() {
     db.prepare("INSERT OR IGNORE INTO superadmin_config (clave, valor) VALUES ('mp_access_token', '')").run();
   }
 
+  // Mensaje de aviso al profesional: crear uno por defecto para negocios que no lo tengan
+  const negociosSinAviso = db.prepare(
+    "SELECT id FROM negocios WHERE id NOT IN (SELECT negocio_id FROM mensajes_config WHERE tipo='aviso_profesional')"
+  ).all();
+  const AVISO_PROF_DEFAULT = '📅 Hola *{{profesional}}*! Tenés un nuevo turno asignado:\n\n👤 Cliente: {{nombre}}\n🗓️ Fecha: {{fecha}}\n🕐 Hora: {{hora}}\n\nPor favor confirmá la disponibilidad.';
+  for (const n of negociosSinAviso) {
+    db.prepare("INSERT INTO mensajes_config (negocio_id, tipo, activo, mensaje, hora_envio, dias_antes) VALUES (?, 'aviso_profesional', 1, ?, '09:00', 0)")
+      .run(n.id, AVISO_PROF_DEFAULT);
+  }
+
   saveDb();
   console.log('✅ Base de datos iniciada');
 }
 
-module.exports = { db, initDb };
+module.exports = { db, initDb, DB_PATH, forceSave: saveDb };

@@ -87,11 +87,16 @@ router.post('/turnos', authAdmin, async (req, res) => {
   if (profesional_id) {
     const prof = db.prepare('SELECT nombre, telefono FROM profesionales WHERE id=? AND negocio_id=?').get(profesional_id, req.negocioId);
     if (prof?.telefono) {
-      const servicio = servicio_id ? db.prepare('SELECT nombre FROM servicios WHERE id=?').get(servicio_id) : null;
-      const msgProf = `📅 Hola *${prof.nombre}*! Tenés un nuevo turno asignado:\n\n👤 Cliente: ${cliente_nombre}\n${servicio?.nombre ? '✂️ Servicio: ' + servicio.nombre + '\n' : ''}🗓️ Fecha: ${fecha}\n🕐 Hora: ${hora}\n\nPor favor confirmá la disponibilidad.`;
-      await enviarMensaje(req.negocioId, prof.telefono, msgProf).catch(() => {});
-      db.prepare("INSERT INTO mensajes_log (negocio_id, turno_id, tipo, destinatario, mensaje, estado) VALUES (?,?,?,?,?,?)")
-        .run(req.negocioId, result.lastInsertRowid, 'aviso_profesional', prof.telefono, msgProf, 'enviado');
+      const msgAviso = db.prepare("SELECT * FROM mensajes_config WHERE negocio_id=? AND tipo='aviso_profesional' AND activo=1").get(req.negocioId);
+      if (msgAviso) {
+        const negocio = db.prepare('SELECT nombre FROM negocios WHERE id=?').get(req.negocioId);
+        const servicio = servicio_id ? db.prepare('SELECT nombre FROM servicios WHERE id=?').get(servicio_id) : null;
+        const { reemplazarVariables } = require('../services/scheduler');
+        const msgProf = reemplazarVariables(msgAviso.mensaje, { nombre: cliente_nombre, fecha, hora, servicio: servicio?.nombre || '', profesional: prof.nombre, negocio: negocio?.nombre || '' });
+        await enviarMensaje(req.negocioId, prof.telefono, msgProf).catch(() => {});
+        db.prepare("INSERT INTO mensajes_log (negocio_id, turno_id, tipo, destinatario, mensaje, estado) VALUES (?,?,?,?,?,?)")
+          .run(req.negocioId, result.lastInsertRowid, 'aviso_profesional', prof.telefono, msgProf, 'enviado');
+      }
     }
   }
   res.json({ id: result.lastInsertRowid });
@@ -299,11 +304,11 @@ router.get('/mensajes', authAdmin, (req, res) => {
 });
 router.post('/mensajes', authAdmin, (req, res) => {
   const { tipo, mensaje, activo, hora_envio, dias_antes, unidad } = req.body;
-  if (!tipo || !['confirmacion', 'recordatorio', 'cancelacion'].includes(tipo)) return res.status(400).json({ error: 'Tipo inválido' });
+  if (!tipo || !['confirmacion', 'recordatorio', 'cancelacion', 'aviso_profesional'].includes(tipo)) return res.status(400).json({ error: 'Tipo inválido' });
   if (!mensaje) return res.status(400).json({ error: 'El mensaje es requerido' });
-  if (tipo === 'confirmacion' || tipo === 'cancelacion') {
+  if (tipo === 'confirmacion' || tipo === 'cancelacion' || tipo === 'aviso_profesional') {
     const existente = db.prepare("SELECT id FROM mensajes_config WHERE negocio_id=? AND tipo=?").get(req.negocioId, tipo);
-    if (existente) return res.status(400).json({ error: `Ya existe un mensaje de ${tipo === 'confirmacion' ? 'confirmación' : 'cancelación'}. Editá el existente en vez de crear otro.` });
+    if (existente) return res.status(400).json({ error: `Ya existe un mensaje de este tipo. Editá el existente en vez de crear otro.` });
   }
   const r = db.prepare('INSERT INTO mensajes_config (negocio_id, tipo, activo, mensaje, hora_envio, dias_antes, unidad) VALUES (?,?,?,?,?,?,?)')
     .run(req.negocioId, tipo, activo === false ? 0 : 1, mensaje, hora_envio || '09:00', tipo === 'recordatorio' ? (dias_antes ?? 1) : 0, tipo === 'recordatorio' ? (unidad === 'horas' ? 'horas' : 'dias') : 'dias');
