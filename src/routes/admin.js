@@ -11,8 +11,21 @@ router.post('/login', (req, res) => {
   if (!negocio) return res.status(401).json({ error: 'Token inválido o negocio inactivo' });
   const jwt = require('jsonwebtoken');
   const { JWT_SECRET } = require('../middleware/auth');
-  const jwtToken = jwt.sign({ negocio_id: negocio.id, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+  const jwtToken = jwt.sign({ negocio_id: negocio.id, role: 'admin' }, JWT_SECRET);
   res.json({ token: jwtToken, negocio: { id: negocio.id, nombre: negocio.nombre, slug: negocio.slug, tipo: negocio.tipo } });
+});
+
+// ============ Cambiar clave de acceso ============
+router.put('/clave', authAdmin, (req, res) => {
+  const { actual, nueva } = req.body;
+  if (!nueva || nueva.trim().length < 4) return res.status(400).json({ error: 'La nueva clave debe tener al menos 4 caracteres' });
+  const negocio = db.prepare('SELECT * FROM negocios WHERE id=?').get(req.negocioId);
+  if (!negocio) return res.status(404).json({ error: 'Negocio no encontrado' });
+  if (negocio.token !== actual) return res.status(401).json({ error: 'La clave actual no es correcta' });
+  const enUso = db.prepare('SELECT id FROM negocios WHERE token=? AND id!=?').get(nueva.trim(), req.negocioId);
+  if (enUso) return res.status(400).json({ error: 'Esa clave ya está en uso, elegí otra' });
+  db.prepare('UPDATE negocios SET token=? WHERE id=?').run(nueva.trim(), req.negocioId);
+  res.json({ ok: true });
 });
 
 // ============ Info negocio ============

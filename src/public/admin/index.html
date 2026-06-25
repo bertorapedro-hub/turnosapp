@@ -202,6 +202,7 @@ tr:last-child td{border-bottom:none}
       <button class="nav-item" data-page="whatsapp"><span class="nav-icon">📱</span> WhatsApp</button>
     </nav>
     <div class="sidebar-footer">
+      <button class="nav-item" onclick="openModalClave()"><span class="nav-icon">🔒</span> Cambiar clave</button>
       <button class="nav-item" onclick="logout()"><span class="nav-icon">🚪</span> Salir</button>
     </div>
   </div>
@@ -225,7 +226,8 @@ tr:last-child td{border-bottom:none}
       <button class="more-btn" onclick="showPageFromMore('horarios')"><span class="icon">🕐</span>Horarios</button>
       <button class="more-btn" onclick="showPageFromMore('whatsapp')"><span class="icon">📱</span>WhatsApp</button>
     </div>
-    <div style="display:flex;justify-content:center;margin-top:10px">
+    <div style="display:flex;justify-content:center;gap:8px;margin-top:10px">
+      <button class="btn btn-secondary btn-sm" onclick="openModalClave()">🔒 Cambiar clave</button>
       <button class="btn btn-danger btn-sm" onclick="logout()">🚪 Salir</button>
     </div>
   </div>
@@ -433,6 +435,30 @@ tr:last-child td{border-bottom:none}
 </div>
 
 <!-- MODAL TURNO (flujo en 3 pasos) -->
+<div class="modal-bg" id="modal-clave">
+  <div class="modal">
+    <h2>Cambiar clave de acceso</h2>
+    <div id="clave-error" style="display:none;color:var(--danger,#e53e3e);margin-bottom:10px;font-size:.9rem"></div>
+    <div class="form-group">
+      <label>Clave actual</label>
+      <input type="password" id="clave-actual" placeholder="Tu clave actual" />
+    </div>
+    <div class="form-group">
+      <label>Nueva clave</label>
+      <input type="password" id="clave-nueva" placeholder="Mínimo 4 caracteres" />
+    </div>
+    <div class="form-group">
+      <label>Repetir nueva clave</label>
+      <input type="password" id="clave-nueva2" placeholder="Repetí la nueva clave" />
+    </div>
+    <p class="text-muted" style="margin-bottom:14px">Importante: esta clave es la que usás para entrar al panel. Guardala bien, no hay forma de recuperarla si la olvidás (tendrías que pedirle al Superadmin que te genere una nueva).</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-clave')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarClave()">Guardar nueva clave</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modal-turno">
   <div class="modal">
     <!-- PASO 1: DNI del cliente -->
@@ -616,33 +642,54 @@ async function doLogin() {
     if (!r.ok) throw new Error(data.error);
     TOKEN = data.token;
     NEGOCIO = data.negocio;
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    document.getElementById('sb-nombre').textContent = NEGOCIO.nombre;
-    document.getElementById('sb-slug').textContent = '/reservar/' + NEGOCIO.slug;
-    const esMulti = NEGOCIO.tipo === 'multi';
-    document.getElementById('sb-profesionales').style.display = esMulti ? 'flex' : 'none';
-    document.getElementById('more-prof').style.display = esMulti ? 'flex' : 'none';
-    const filtroProf = document.getElementById('filtro-profesional');
-    if (esMulti) {
-      profesionales = await api('/profesionales');
-      filtroProf.innerHTML = '<option value="">Todos los profesionales</option>'+profesionales.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
-      filtroProf.style.display = 'block';
-    } else {
-      filtroProf.style.display = 'none';
-    }
-    loadStats();
-    renderCalendario();
-    checkWAEstado();
-    setInterval(checkWAEstado, 15000);
+    localStorage.setItem('turnosapp_admin_token', TOKEN);
+    await mostrarApp();
   } catch(e) {
     const el = document.getElementById('login-error');
     el.style.display = 'block'; el.textContent = e.message;
   }
 }
 
+// Muestra el panel ya logueado. Se usa tanto al loguearse a mano como al restaurar una sesión guardada.
+async function mostrarApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('sb-nombre').textContent = NEGOCIO.nombre;
+  document.getElementById('sb-slug').textContent = '/reservar/' + NEGOCIO.slug;
+  const esMulti = NEGOCIO.tipo === 'multi';
+  document.getElementById('sb-profesionales').style.display = esMulti ? 'flex' : 'none';
+  document.getElementById('more-prof').style.display = esMulti ? 'flex' : 'none';
+  const filtroProf = document.getElementById('filtro-profesional');
+  if (esMulti) {
+    profesionales = await api('/profesionales');
+    filtroProf.innerHTML = '<option value="">Todos los profesionales</option>'+profesionales.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+    filtroProf.style.display = 'block';
+  } else {
+    filtroProf.style.display = 'none';
+  }
+  loadStats();
+  renderCalendario();
+  checkWAEstado();
+  setInterval(checkWAEstado, 15000);
+}
+
+// Al cargar la página, si hay un token guardado de una sesión anterior, lo probamos antes de pedir login de nuevo.
+(async function intentarSesionGuardada() {
+  const guardado = localStorage.getItem('turnosapp_admin_token');
+  if (!guardado) return;
+  TOKEN = guardado;
+  try {
+    NEGOCIO = await api('/negocio');
+    await mostrarApp();
+  } catch {
+    // Token vencido o inválido: lo descartamos y dejamos la pantalla de login normal.
+    localStorage.removeItem('turnosapp_admin_token');
+    TOKEN = ''; NEGOCIO = null;
+  }
+})();
+
 document.getElementById('login-token').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
-function logout() { TOKEN=''; NEGOCIO=null; location.reload(); }
+function logout() { TOKEN=''; NEGOCIO=null; localStorage.removeItem('turnosapp_admin_token'); location.reload(); }
 
 // Cerrar modales con clic en fondo
 document.querySelectorAll('.modal-bg').forEach(bg => bg.addEventListener('click', e => { if(e.target===bg) bg.classList.remove('open'); }));
@@ -684,6 +731,32 @@ function showTab(el, group, name) {
 }
 
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function openModalClave() {
+  document.getElementById('clave-actual').value = '';
+  document.getElementById('clave-nueva').value = '';
+  document.getElementById('clave-nueva2').value = '';
+  document.getElementById('clave-error').style.display = 'none';
+  document.getElementById('modal-clave').classList.add('open');
+}
+
+async function guardarClave() {
+  const actual = document.getElementById('clave-actual').value.trim();
+  const nueva = document.getElementById('clave-nueva').value.trim();
+  const nueva2 = document.getElementById('clave-nueva2').value.trim();
+  const errEl = document.getElementById('clave-error');
+  errEl.style.display = 'none';
+  if (!actual || !nueva || !nueva2) { errEl.textContent = 'Completá los tres campos'; errEl.style.display='block'; return; }
+  if (nueva !== nueva2) { errEl.textContent = 'Las dos claves nuevas no coinciden'; errEl.style.display='block'; return; }
+  try {
+    await api('/clave', 'PUT', { actual, nueva });
+    closeModal('modal-clave');
+    alert('Clave actualizada. La vas a usar la próxima vez que inicies sesión en un dispositivo nuevo.');
+  } catch(e) {
+    errEl.textContent = e.message || 'No se pudo cambiar la clave';
+    errEl.style.display = 'block';
+  }
+}
 function fmtFecha(f) { if(!f) return '—'; const [y,m,d]=f.split('-'); return `${d}/${m}/${y}`; }
 
 // STATS

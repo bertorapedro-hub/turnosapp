@@ -20,7 +20,7 @@ router.post('/login', (req, res) => {
   const sa = db.prepare('SELECT * FROM superadmin WHERE username=?').get(username);
   if (!sa || !bcrypt.compareSync(password, sa.password_hash))
     return res.status(401).json({ error: 'Credenciales incorrectas' });
-  const token = jwt.sign({ id: sa.id, role: 'superadmin' }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ id: sa.id, role: 'superadmin' }, JWT_SECRET);
   res.json({ token, username: sa.username });
 });
 

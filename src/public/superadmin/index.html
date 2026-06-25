@@ -193,6 +193,7 @@ async function doLogin() {
     const data = await d.json();
     if (!d.ok) throw new Error(data.error);
     TOKEN = data.token;
+    localStorage.setItem('turnosapp_superadmin_token', TOKEN);
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     loadNegocios();
@@ -202,9 +203,25 @@ async function doLogin() {
   }
 }
 
+// Al cargar la página, si hay un token guardado de una sesión anterior, lo probamos antes de pedir login de nuevo.
+(async function intentarSesionGuardada() {
+  const guardado = localStorage.getItem('turnosapp_superadmin_token');
+  if (!guardado) return;
+  TOKEN = guardado;
+  try {
+    await api('/negocios');
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    loadNegocios();
+  } catch {
+    localStorage.removeItem('turnosapp_superadmin_token');
+    TOKEN = '';
+  }
+})();
+
 document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 
-function logout() { TOKEN=''; location.reload(); }
+function logout() { TOKEN=''; localStorage.removeItem('turnosapp_superadmin_token'); location.reload(); }
 
 function descargarBackup() {
   // Usamos un link temporal con el token en query, ya que el navegador no puede mandar
