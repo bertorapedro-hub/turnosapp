@@ -149,6 +149,7 @@ async function initDb() {
     "ALTER TABLE mensajes_log ADD COLUMN config_id INTEGER",
     "ALTER TABLE profesionales ADD COLUMN telefono TEXT",
     "ALTER TABLE mensajes_config ADD COLUMN unidad TEXT DEFAULT 'dias'",
+    "ALTER TABLE turnos ADD COLUMN cancelado_por TEXT",
   ];
   for (const m of migraciones) {
     try { _db.run(m); } catch(e) {}
@@ -189,11 +190,20 @@ async function initDb() {
   const negociosSinAviso = db.prepare(
     "SELECT id FROM negocios WHERE id NOT IN (SELECT negocio_id FROM mensajes_config WHERE tipo='aviso_profesional')"
   ).all();
-  const AVISO_PROF_DEFAULT = '📅 Hola *{{profesional}}*! Tenés un nuevo turno asignado:\n\n👤 Cliente: {{nombre}}\n🗓️ Fecha: {{fecha}}\n🕐 Hora: {{hora}}\n\nPor favor confirmá la disponibilidad.';
+  const AVISO_PROF_DEFAULT = '📅 Hola *{{profesional}}*! Tenés un nuevo turno asignado:\n\n👤 Cliente: {{nombre}}\n🗓️ Fecha: {{fecha}}\n🕐 Hora: {{hora}}\n\nRespondé *Confirmar* o *Cancelar* para avisarnos si podés atenderlo.';
   for (const n of negociosSinAviso) {
     db.prepare("INSERT INTO mensajes_config (negocio_id, tipo, activo, mensaje, hora_envio, dias_antes) VALUES (?, 'aviso_profesional', 1, ?, '09:00', 0)")
       .run(n.id, AVISO_PROF_DEFAULT);
   }
+
+  // Actualizar el texto por defecto en negocios que todavía no lo personalizaron (no toca mensajes ya editados a mano)
+  const AVISO_PROF_VIEJO = '📅 Hola *{{profesional}}*! Tenés un nuevo turno asignado:\n\n👤 Cliente: {{nombre}}\n🗓️ Fecha: {{fecha}}\n🕐 Hora: {{hora}}\n\nPor favor confirmá la disponibilidad.';
+  db.prepare("UPDATE mensajes_config SET mensaje=? WHERE tipo='aviso_profesional' AND mensaje=?").run(AVISO_PROF_DEFAULT, AVISO_PROF_VIEJO);
+  const CONF_VIEJO = '✅ *{{nombre}}*, tu turno quedó confirmado para el *{{fecha}}* a las *{{hora}}*. ¡Hasta pronto!';
+  const CONF_NUEVO = '✅ *{{nombre}}*, tu turno quedó registrado para el *{{fecha}}* a las *{{hora}}*.\n\nRespondé *Confirmar* o *Cancelar* para avisarnos.\nSi querés pedir otro turno o cancelar este desde la web, entrá acá: {{link_reservas}}\n\n¡Gracias!';
+  db.prepare("UPDATE mensajes_config SET mensaje=? WHERE tipo='confirmacion' AND mensaje=?").run(CONF_NUEVO, CONF_VIEJO);
+  const CONF_INTERMEDIO = '✅ *{{nombre}}*, tu turno quedó registrado para el *{{fecha}}* a las *{{hora}}*.\n\nRespondé *Confirmar* o *Cancelar* para avisarnos. ¡Gracias!';
+  db.prepare("UPDATE mensajes_config SET mensaje=? WHERE tipo='confirmacion' AND mensaje=?").run(CONF_NUEVO, CONF_INTERMEDIO);
 
   saveDb();
   console.log('✅ Base de datos iniciada');

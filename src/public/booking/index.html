@@ -78,6 +78,23 @@
     </div>
     <div id="step1-msg" style="display:none" class="alert"></div>
     <button class="btn btn-primary" onclick="buscarDni()">Continuar →</button>
+    <p style="text-align:center;margin-top:14px;font-size:.85rem"><a href="#" onclick="mostrarCancelar();return false;" style="color:var(--accent)">¿Ya tenés un turno reservado? Cancelalo aquí</a></p>
+  </div>
+
+  <!-- CANCELAR TURNO -->
+  <div class="card step" id="step-cancelar">
+    <div class="step-header">
+      <h2>📋 Mis turnos</h2>
+      <p>Ingresá tu DNI para ver y cancelar tus turnos</p>
+    </div>
+    <div class="form-group">
+      <label>DNI *</label>
+      <input type="text" id="cancel-dni" placeholder="12345678" inputmode="numeric" maxlength="10" />
+    </div>
+    <div id="cancel-msg" style="display:none" class="alert"></div>
+    <button class="btn btn-primary" onclick="buscarMisTurnos()">Buscar mis turnos</button>
+    <div id="cancel-lista" style="margin-top:14px"></div>
+    <button class="btn btn-secondary" onclick="goStep(1)">← Volver</button>
   </div>
 
   <!-- STEP 2: DATOS -->
@@ -162,8 +179,10 @@ let profSeleccionado = null, srvSeleccionado = null, horaSeleccionada = null;
 let currentStep = 1;
 const TOTAL_STEPS = 6;
 
-async function api(path) {
-  const r = await fetch('/api/booking' + path);
+async function api(path, method='GET', body=null) {
+  const opts = { method };
+  if (body) { opts.headers = { 'Content-Type': 'application/json' }; opts.body = JSON.stringify(body); }
+  const r = await fetch('/api/booking' + path, opts);
   if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Error'); }
   return r.json();
 }
@@ -205,7 +224,45 @@ function showStep(n) {
   window.scrollTo(0, 0);
 }
 
-function goStep(n) { showStep(n); }
+function mostrarCancelar() {
+  document.querySelectorAll('.step').forEach(s => { s.classList.remove('active'); s.style.display=''; });
+  document.getElementById('step-cancelar').classList.add('active');
+  document.getElementById('step-cancelar').style.display = 'block';
+  document.getElementById('cancel-lista').innerHTML = '';
+  window.scrollTo(0, 0);
+}
+
+async function buscarMisTurnos() {
+  const dni = document.getElementById('cancel-dni').value.trim();
+  const msgEl = document.getElementById('cancel-msg');
+  const listaEl = document.getElementById('cancel-lista');
+  msgEl.style.display = 'none'; listaEl.innerHTML = '';
+  if (!dni) { msgEl.style.display='block'; msgEl.className='alert alert-error'; msgEl.textContent='Ingresá tu DNI'; return; }
+  try {
+    const turnos = await api('/mis-turnos/' + slug + '/' + dni);
+    if (!turnos.length) { listaEl.innerHTML = '<p style="color:var(--muted);font-size:.85rem;text-align:center">No tenés turnos próximos con este DNI.</p>'; return; }
+    listaEl.innerHTML = turnos.map(t => `
+      <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
+        <div style="font-weight:600">${t.fecha} - ${t.hora}</div>
+        <div style="font-size:.85rem;color:var(--muted)">${t.servicio_nombre||'Servicio'}${t.profesional_nombre ? ' · '+t.profesional_nombre : ''}</div>
+        <div style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Estado: ${t.estado}</div>
+        <button class="btn btn-secondary" style="background:var(--red);color:#fff;margin-top:0" onclick="cancelarMiTurno(${t.id},'${dni.replace(/'/g,"\\'")}')">Cancelar este turno</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    msgEl.style.display='block'; msgEl.className='alert alert-error'; msgEl.textContent = e.message || 'No pudimos buscar tus turnos';
+  }
+}
+
+async function cancelarMiTurno(turnoId, dni) {
+  if (!confirm('¿Seguro que querés cancelar este turno?')) return;
+  try {
+    await api('/cancelar/' + slug, 'POST', { turno_id: turnoId, dni });
+    buscarMisTurnos();
+  } catch (e) {
+    alert(e.message || 'No pudimos cancelar el turno');
+  }
+}
 
 async function buscarDni() {
   const dni = document.getElementById('input-dni').value.trim();

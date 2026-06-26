@@ -11,6 +11,16 @@ const ultimosQR = new Map();
 const ultimosErrores = new Map();
 // Map de callbacks de QR por negocioId
 const qrCallbacksMap = new Map();
+// Map de teléfono (solo dígitos) -> { negocioId, turnoId, rol, ts } — para saber a qué turno corresponde un "Confirmar"/"Cancelar"
+const esperandoRespuesta = new Map();
+
+// Avisa al servicio que un teléfono puede responder "Confirmar"/"Cancelar" para el turno indicado.
+// rol: 'cliente' o 'profesional', según a quién le mandamos el mensaje.
+function registrarEsperaRespuesta(telefono, negocioId, turnoId, rol) {
+  const digits = (telefono || '').replace(/\D/g, '');
+  if (!digits) return;
+  esperandoRespuesta.set(digits, { negocioId, turnoId, rol, ts: Date.now() });
+}
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -103,6 +113,21 @@ async function conectarWhatsApp(negocioId) {
 
     sock.ev.on('creds.update', saveCreds);
 
+    // Escuchar mensajes entrantes para detectar respuestas "Confirmar" / "Cancelar"
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+      if (negocioId === 'superadmin') return; // el WhatsApp del superadmin no gestiona turnos
+      for (const msg of messages) {
+        try {
+          if (!msg.message || msg.key.fromMe) continue;
+          const texto = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim().toLowerCase();
+          if (texto !== 'confirmar' && texto !== 'cancelar') continue;
+          const telefono = (msg.key.remoteJid || '').split('@')[0];
+          if (!telefono) continue;
+          await procesarRespuestaTurno(negocioId, telefono, texto);
+        } catch (e) { console.error(`[WA ${negocioId}] Error procesando mensaje entrante:`, e.message); }
+      }
+    });
+
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
@@ -168,6 +193,59 @@ async function conectarWhatsApp(negocioId) {
   }
 }
 
+// ─── procesar respuesta "Confirmar"/"Cancelar" ────────────────────────────────
+
+async function procesarRespuestaTurno(negocioId, telefono, accion) {
+  const digits = telefono.replace(/\D/g, '');
+  let turno = null, rol = null;
+
+  // 1) ¿Le mandamos hace poco un mensaje a este número esperando esta respuesta?
+  const espera = esperandoRespuesta.get(digits);
+  if (espera && espera.negocioId === negocioId) {
+    turno = db.prepare("SELECT * FROM turnos WHERE id=? AND estado='pendiente'").get(espera.turnoId);
+    rol = espera.rol;
+  }
+
+  // 2) Si no, buscamos el próximo turno pendiente de este número como cliente
+  if (!turno) {
+    const ultimos = digits.slice(-8);
+    turno = db.prepare(`SELECT * FROM turnos WHERE negocio_id=? AND estado='pendiente' AND cliente_telefono LIKE '%'||?
+      AND fecha >= date('now') ORDER BY fecha ASC, hora ASC LIMIT 1`).get(negocioId, ultimos);
+    if (turno) rol = 'cliente';
+  }
+
+  if (!turno) {
+    await enviarMensaje(negocioId, telefono, 'No encontramos un turno pendiente asociado a este número. Si necesitás ayuda, escribinos directamente. 🙏').catch(() => {});
+    return;
+  }
+
+  const nuevoEstado = accion === 'confirmar' ? 'confirmado' : 'cancelado';
+  db.prepare("UPDATE turnos SET estado=?, cancelado_por=CASE WHEN ?='cancelado' THEN ? ELSE cancelado_por END WHERE id=?")
+    .run(nuevoEstado, nuevoEstado, rol, turno.id);
+  esperandoRespuesta.delete(digits);
+
+  const respuesta = accion === 'confirmar'
+    ? `✅ ¡Listo! Tu turno del *${turno.fecha}* a las *${turno.hora}* quedó *confirmado*. ¡Gracias!`
+    : `❌ Tu turno del *${turno.fecha}* a las *${turno.hora}* fue *cancelado*.`;
+  await enviarMensaje(negocioId, telefono, respuesta).catch(() => {});
+  db.prepare("INSERT INTO mensajes_log (negocio_id, turno_id, tipo, destinatario, mensaje, estado) VALUES (?,?,?,?,?,?)")
+    .run(negocioId, turno.id, accion === 'confirmar' ? 'confirmacion' : 'cancelacion', telefono, respuesta, 'enviado');
+
+  // Avisamos a la otra parte (si el que respondió fue el profesional, avisamos al cliente; y viceversa)
+  if (rol === 'profesional' && turno.cliente_telefono) {
+    const msgCliente = accion === 'confirmar'
+      ? `✅ *${turno.cliente_nombre}*, tu turno del *${turno.fecha}* a las *${turno.hora}* fue confirmado por el profesional.`
+      : `❌ Hola *${turno.cliente_nombre}*, tu turno del *${turno.fecha}* a las *${turno.hora}* fue cancelado por el profesional.`;
+    await enviarMensaje(negocioId, turno.cliente_telefono, msgCliente).catch(() => {});
+  } else if (rol === 'cliente' && accion === 'cancelar' && turno.profesional_id) {
+    const prof = db.prepare('SELECT telefono FROM profesionales WHERE id=?').get(turno.profesional_id);
+    if (prof?.telefono) {
+      const msgProf = `❌ El turno de *${turno.cliente_nombre}* el *${turno.fecha}* a las *${turno.hora}* fue cancelado por el cliente. Ese horario quedó libre nuevamente.`;
+      await enviarMensaje(negocioId, prof.telefono, msgProf).catch(() => {});
+    }
+  }
+}
+
 // ─── enviar mensaje ─────────────────────────────────────────────────────────
 
 async function enviarMensaje(negocioId, telefono, mensaje) {
@@ -219,4 +297,5 @@ module.exports = {
   desconectar,
   reconectarSesionesGuardadas,
   onNuevoQR,
+  registrarEsperaRespuesta,
 };

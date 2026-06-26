@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../models/database');
 const { authAdmin } = require('../middleware/auth');
-const { conectarWhatsApp, getEstado, getQR, desconectar, enviarMensaje, onNuevoQR } = require('../services/whatsapp');
+const { conectarWhatsApp, getEstado, getQR, desconectar, enviarMensaje, onNuevoQR, registrarEsperaRespuesta } = require('../services/whatsapp');
 
 // ============ Login ============
 router.post('/login', (req, res) => {
@@ -85,12 +85,16 @@ router.post('/turnos', authAdmin, async (req, res) => {
   if (cliente_telefono) {
     const msgConf = db.prepare("SELECT * FROM mensajes_config WHERE negocio_id=? AND tipo='confirmacion' AND activo=1").get(req.negocioId);
     if (msgConf) {
-      const negocio = db.prepare('SELECT nombre FROM negocios WHERE id=?').get(req.negocioId);
+      const negocio = db.prepare('SELECT nombre, slug FROM negocios WHERE id=?').get(req.negocioId);
       const servicio = servicio_id ? db.prepare('SELECT nombre FROM servicios WHERE id=?').get(servicio_id) : null;
       const prof = profesional_id ? db.prepare('SELECT nombre FROM profesionales WHERE id=?').get(profesional_id) : null;
       const { reemplazarVariables } = require('../services/scheduler');
-      const msg = reemplazarVariables(msgConf.mensaje, { nombre: cliente_nombre, fecha, hora, servicio: servicio?.nombre || '', profesional: prof?.nombre || '', negocio: negocio?.nombre || '' });
+      const msg = reemplazarVariables(msgConf.mensaje, {
+        nombre: cliente_nombre, fecha, hora, servicio: servicio?.nombre || '', profesional: prof?.nombre || '', negocio: negocio?.nombre || '',
+        link_reservas: (process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`) + '/reservar/' + (negocio?.slug || '')
+      });
       await enviarMensaje(req.negocioId, cliente_telefono, msg).catch(() => {});
+      registrarEsperaRespuesta(cliente_telefono, req.negocioId, result.lastInsertRowid, 'cliente');
       db.prepare("INSERT INTO mensajes_log (negocio_id, turno_id, tipo, destinatario, mensaje, estado) VALUES (?,?,?,?,?,?)")
         .run(req.negocioId, result.lastInsertRowid, 'confirmacion', cliente_telefono, msg, 'enviado');
     }
@@ -107,6 +111,7 @@ router.post('/turnos', authAdmin, async (req, res) => {
         const { reemplazarVariables } = require('../services/scheduler');
         const msgProf = reemplazarVariables(msgAviso.mensaje, { nombre: cliente_nombre, fecha, hora, servicio: servicio?.nombre || '', profesional: prof.nombre, negocio: negocio?.nombre || '' });
         await enviarMensaje(req.negocioId, prof.telefono, msgProf).catch(() => {});
+        registrarEsperaRespuesta(prof.telefono, req.negocioId, result.lastInsertRowid, 'profesional');
         db.prepare("INSERT INTO mensajes_log (negocio_id, turno_id, tipo, destinatario, mensaje, estado) VALUES (?,?,?,?,?,?)")
           .run(req.negocioId, result.lastInsertRowid, 'aviso_profesional', prof.telefono, msgProf, 'enviado');
       }
@@ -119,29 +124,33 @@ router.put('/turnos/:id', authAdmin, async (req, res) => {
   const { estado, notas, fecha, hora } = req.body;
   const t = db.prepare('SELECT * FROM turnos WHERE id=? AND negocio_id=?').get(req.params.id, req.negocioId);
   if (!t) return res.status(404).json({ error: 'No encontrado' });
-  db.prepare('UPDATE turnos SET estado=COALESCE(?,estado), notas=COALESCE(?,notas), fecha=COALESCE(?,fecha), hora=COALESCE(?,hora) WHERE id=?')
-    .run(estado || null, notas || null, fecha || null, hora || null, req.params.id);
+  const cancelaAhora = estado === 'cancelado' && t.estado !== 'cancelado';
+  db.prepare('UPDATE turnos SET estado=COALESCE(?,estado), notas=COALESCE(?,notas), fecha=COALESCE(?,fecha), hora=COALESCE(?,hora), cancelado_por=CASE WHEN ?=1 THEN \'admin\' ELSE cancelado_por END WHERE id=?')
+    .run(estado || null, notas || null, fecha || null, hora || null, cancelaAhora ? 1 : 0, req.params.id);
 
-  if (estado === 'cancelado' && t.estado !== 'cancelado' && t.cliente_telefono) {
-    const msgCanc = db.prepare("SELECT * FROM mensajes_config WHERE negocio_id=? AND tipo='cancelacion' AND activo=1").get(req.negocioId);
-    if (msgCanc) {
-      const negocio = db.prepare('SELECT nombre FROM negocios WHERE id=?').get(req.negocioId);
-      const servicio = t.servicio_id ? db.prepare('SELECT nombre FROM servicios WHERE id=?').get(t.servicio_id) : null;
-      const prof = t.profesional_id ? db.prepare('SELECT nombre FROM profesionales WHERE id=?').get(t.profesional_id) : null;
-      const { reemplazarVariables } = require('../services/scheduler');
-      const msg = reemplazarVariables(msgCanc.mensaje, { nombre: t.cliente_nombre, fecha: t.fecha, hora: t.hora, servicio: servicio?.nombre || '', profesional: prof?.nombre || '', negocio: negocio?.nombre || '' });
-      await enviarMensaje(req.negocioId, t.cliente_telefono, msg).catch(() => {});
-      db.prepare("INSERT INTO mensajes_log (negocio_id, turno_id, tipo, destinatario, mensaje, estado) VALUES (?,?,?,?,?,?)")
-        .run(req.negocioId, t.id, 'cancelacion', t.cliente_telefono, msg, 'enviado');
+  if (cancelaAhora) {
+    const negocio = db.prepare('SELECT nombre FROM negocios WHERE id=?').get(req.negocioId);
+    const servicio = t.servicio_id ? db.prepare('SELECT nombre FROM servicios WHERE id=?').get(t.servicio_id) : null;
+    const prof = t.profesional_id ? db.prepare('SELECT nombre, telefono FROM profesionales WHERE id=?').get(t.profesional_id) : null;
+    const { reemplazarVariables } = require('../services/scheduler');
+    if (t.cliente_telefono) {
+      const msgCanc = db.prepare("SELECT * FROM mensajes_config WHERE negocio_id=? AND tipo='cancelacion' AND activo=1").get(req.negocioId);
+      if (msgCanc) {
+        const msg = reemplazarVariables(msgCanc.mensaje, { nombre: t.cliente_nombre, fecha: t.fecha, hora: t.hora, servicio: servicio?.nombre || '', profesional: prof?.nombre || '', negocio: negocio?.nombre || '' });
+        await enviarMensaje(req.negocioId, t.cliente_telefono, msg).catch(() => {});
+        db.prepare("INSERT INTO mensajes_log (negocio_id, turno_id, tipo, destinatario, mensaje, estado) VALUES (?,?,?,?,?,?)")
+          .run(req.negocioId, t.id, 'cancelacion', t.cliente_telefono, msg, 'enviado');
+      }
+    }
+    if (prof?.telefono) {
+      const msgProf = `❌ El turno de *${t.cliente_nombre}* el *${t.fecha}* a las *${t.hora}* fue cancelado desde el panel. Ese horario queda bloqueado hasta que lo revisen.`;
+      await enviarMensaje(req.negocioId, prof.telefono, msgProf).catch(() => {});
     }
   }
   res.json({ ok: true });
 });
 
-router.delete('/turnos/:id', authAdmin, (req, res) => {
-  db.prepare('DELETE FROM turnos WHERE id=? AND negocio_id=?').run(req.params.id, req.negocioId);
-  res.json({ ok: true });
-});
+// Los turnos no se eliminan: se cancelan (PUT /turnos/:id con estado='cancelado'), así el cliente siempre recibe el aviso.
 
 // ============ Profesionales ============
 router.get('/profesionales', authAdmin, (req, res) => {
@@ -287,7 +296,7 @@ router.get('/disponibilidad', authAdmin, (req, res) => {
 
   let sqlTurnos = `SELECT t.hora, COALESCE(s.duracion_minutos,30) as duracion
     FROM turnos t LEFT JOIN servicios s ON s.id = t.servicio_id
-    WHERE t.negocio_id=? AND t.fecha=? AND t.estado!='cancelado'`;
+    WHERE t.negocio_id=? AND t.fecha=? AND (t.estado!='cancelado' OR t.cancelado_por IN ('profesional','admin'))`;
   const paramsTurnos = [req.negocioId, fecha];
   if (profesional_id) { sqlTurnos += ' AND t.profesional_id=?'; paramsTurnos.push(profesional_id); }
   const ocupados = db.prepare(sqlTurnos).all(...paramsTurnos).map(t => {

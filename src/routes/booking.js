@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../models/database');
-const { enviarMensaje } = require('../services/whatsapp');
+const { enviarMensaje, registrarEsperaRespuesta } = require('../services/whatsapp');
 const { reemplazarVariables } = require('../services/scheduler');
 
 // Info del negocio por slug
@@ -18,6 +18,47 @@ router.get('/cliente/:slug/:dni', (req, res) => {
   const c = db.prepare('SELECT * FROM clientes WHERE negocio_id=? AND dni=?').get(n.id, req.params.dni);
   if (!c) return res.status(404).json({ error: 'Cliente no encontrado' });
   res.json(c);
+});
+
+// Turnos futuros de un cliente (para que pueda cancelarlos desde la web, identificándose con su DNI)
+router.get('/mis-turnos/:slug/:dni', (req, res) => {
+  const n = db.prepare("SELECT id FROM negocios WHERE slug=?").get(req.params.slug);
+  if (!n) return res.status(404).json({ error: 'Negocio no encontrado' });
+  const turnos = db.prepare(`
+    SELECT t.id, t.fecha, t.hora, t.estado, s.nombre as servicio_nombre, p.nombre as profesional_nombre
+    FROM turnos t
+    LEFT JOIN servicios s ON s.id = t.servicio_id
+    LEFT JOIN profesionales p ON p.id = t.profesional_id
+    WHERE t.negocio_id=? AND t.cliente_dni=? AND t.estado!='cancelado' AND t.fecha >= date('now')
+    ORDER BY t.fecha ASC, t.hora ASC
+  `).all(n.id, req.params.dni);
+  res.json(turnos);
+});
+
+// Cancelar un turno propio desde la web (se identifica con el DNI con el que reservó)
+router.post('/cancelar/:slug', async (req, res) => {
+  const n = db.prepare("SELECT * FROM negocios WHERE slug=?").get(req.params.slug);
+  if (!n) return res.status(404).json({ error: 'Negocio no encontrado' });
+  const { turno_id, dni } = req.body;
+  if (!turno_id || !dni) return res.status(400).json({ error: 'Faltan datos' });
+  const t = db.prepare('SELECT * FROM turnos WHERE id=? AND negocio_id=?').get(turno_id, n.id);
+  if (!t) return res.status(404).json({ error: 'Turno no encontrado' });
+  if (t.cliente_dni !== dni) return res.status(403).json({ error: 'Ese turno no corresponde a este DNI' });
+  if (t.estado === 'cancelado') return res.status(400).json({ error: 'Ese turno ya estaba cancelado' });
+
+  db.prepare("UPDATE turnos SET estado='cancelado', cancelado_por='cliente' WHERE id=?").run(t.id);
+
+  // Avisar al profesional: el horario queda libre nuevamente
+  if (t.profesional_id) {
+    const prof = db.prepare('SELECT telefono FROM profesionales WHERE id=?').get(t.profesional_id);
+    if (prof?.telefono) {
+      const msgProf = `❌ El turno de *${t.cliente_nombre}* el *${t.fecha}* a las *${t.hora}* fue cancelado por el cliente desde la web. Ese horario quedó libre nuevamente.`;
+      await enviarMensaje(n.id, prof.telefono, msgProf).catch(() => {});
+    }
+  }
+  db.prepare("INSERT INTO mensajes_log (negocio_id, turno_id, tipo, destinatario, mensaje, estado) VALUES (?,?,?,?,?,?)")
+    .run(n.id, t.id, 'cancelacion', t.cliente_telefono, 'Cancelado por el cliente desde la web', 'enviado');
+  res.json({ ok: true });
 });
 
 // Profesionales activos del negocio
@@ -58,7 +99,7 @@ router.get('/horarios/:slug', (req, res) => {
   const horarios = db.prepare(sqlHor).all(...paramsHor);
 
   // Turnos ya ocupados
-  let sqlTurnos = "SELECT hora FROM turnos WHERE negocio_id=? AND fecha=? AND estado!='cancelado'";
+  let sqlTurnos = "SELECT hora FROM turnos WHERE negocio_id=? AND fecha=? AND (estado!='cancelado' OR cancelado_por IN ('profesional','admin'))";
   const paramsTurnos = [n.id, fecha];
   if (profesional_id) { sqlTurnos += ' AND profesional_id=?'; paramsTurnos.push(profesional_id); }
   const ocupados = db.prepare(sqlTurnos).all(...paramsTurnos).map(t => t.hora);
@@ -87,7 +128,7 @@ router.post('/turno/:slug', async (req, res) => {
     return res.status(400).json({ error: 'Faltan datos obligatorios' });
 
   // Verificar disponibilidad
-  let sqlOcupado = "SELECT id FROM turnos WHERE negocio_id=? AND fecha=? AND hora=? AND estado!='cancelado'";
+  let sqlOcupado = "SELECT id FROM turnos WHERE negocio_id=? AND fecha=? AND hora=? AND (estado!='cancelado' OR cancelado_por IN ('profesional','admin'))";
   const paramsOcupado = [n.id, fecha, hora];
   if (profesional_id) { sqlOcupado += ' AND profesional_id=?'; paramsOcupado.push(profesional_id); }
   const ocupado = db.prepare(sqlOcupado).get(...paramsOcupado);
@@ -121,9 +162,11 @@ router.post('/turno/:slug', async (req, res) => {
       const prof = profesional_id ? db.prepare('SELECT nombre FROM profesionales WHERE id=?').get(profesional_id) : null;
       const msg = reemplazarVariables(msgConf.mensaje, {
         nombre: nombreCompleto, fecha, hora,
-        servicio: servicio?.nombre || '', profesional: prof?.nombre || '', negocio: n.nombre
+        servicio: servicio?.nombre || '', profesional: prof?.nombre || '', negocio: n.nombre,
+        link_reservas: (process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`) + '/reservar/' + n.slug
       });
       await enviarMensaje(n.id, cliente_telefono, msg).catch(() => {});
+      registrarEsperaRespuesta(cliente_telefono, n.id, result.lastInsertRowid, 'cliente');
       db.prepare("INSERT INTO mensajes_log (negocio_id, turno_id, tipo, destinatario, mensaje, estado) VALUES (?,?,?,?,?,?)")
         .run(n.id, result.lastInsertRowid, 'confirmacion', cliente_telefono, msg, 'enviado');
     }
@@ -138,6 +181,7 @@ router.post('/turno/:slug', async (req, res) => {
         const servicio = servicio_id ? db.prepare('SELECT nombre FROM servicios WHERE id=?').get(servicio_id) : null;
         const msgProf = reemplazarVariables(msgAviso.mensaje, { nombre: nombreCompleto, fecha, hora, servicio: servicio?.nombre || '', profesional: prof.nombre, negocio: n.nombre });
         await enviarMensaje(n.id, prof.telefono, msgProf).catch(() => {});
+        registrarEsperaRespuesta(prof.telefono, n.id, result.lastInsertRowid, 'profesional');
         db.prepare("INSERT INTO mensajes_log (negocio_id, turno_id, tipo, destinatario, mensaje, estado) VALUES (?,?,?,?,?,?)")
           .run(n.id, result.lastInsertRowid, 'aviso_profesional', prof.telefono, msgProf, 'enviado');
       }

@@ -283,7 +283,7 @@ tr:last-child td{border-bottom:none}
         <div style="overflow-x:auto">
           <table><thead><tr>
             <th>Fecha</th><th>Hora</th><th>Cliente</th>
-            <th class="hide-mobile">Servicio</th><th class="hide-mobile">Profesional</th><th>Estado</th><th></th>
+            <th class="hide-mobile">Servicio</th><th class="hide-mobile">Profesional</th><th>Estado</th>
           </tr></thead>
           <tbody id="tabla-turnos"></tbody></table>
         </div>
@@ -862,13 +862,11 @@ async function loadTurnos() {
         <option value="confirmado" ${t.estado==='confirmado'?'selected':''}>✅ Confirmado</option>
         <option value="cancelado" ${t.estado==='cancelado'?'selected':''}>❌ Cancelado</option>
       </select></td>
-      <td><button class="btn btn-sm btn-danger" onclick="eliminarTurno(${t.id})">🗑</button></td>
     </tr>
   `).join('');
 }
 
 async function cambiarEstado(id,estado) { await api('/turnos/'+id,'PUT',{estado}); refreshTurnos(); }
-async function eliminarTurno(id) { if(!confirm('¿Eliminar turno?'))return; await api('/turnos/'+id,'DELETE'); refreshTurnos(); }
 
 // MODAL TURNO (flujo en 3 pasos: DNI -> [cliente nuevo] -> datos del turno)
 let ntForcedProfId = null;
@@ -1276,6 +1274,7 @@ const VARS_MSG = [
   { v: 'hora', label: 'Hora' },
   { v: 'servicio', label: 'Servicio' },
   { v: 'negocio', label: 'Negocio' },
+  { v: 'link_reservas', label: 'Link de reservas' },
 ];
 function renderMsgVarsButtons(){
   document.getElementById('msg-vars-buttons').innerHTML = VARS_MSG.map(x=>
