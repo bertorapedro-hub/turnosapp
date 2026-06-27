@@ -78,23 +78,17 @@
     </div>
     <div id="step1-msg" style="display:none" class="alert"></div>
     <button class="btn btn-primary" onclick="buscarDni()">Continuar →</button>
-    <p style="text-align:center;margin-top:14px;font-size:.85rem"><a href="#" onclick="mostrarCancelar();return false;" style="color:var(--accent)">¿Ya tenés un turno reservado? Cancelalo aquí</a></p>
   </div>
 
-  <!-- CANCELAR TURNO -->
-  <div class="card step" id="step-cancelar">
+  <!-- PORTAL DEL CLIENTE -->
+  <div class="card step" id="step-portal">
     <div class="step-header">
-      <h2>📋 Mis turnos</h2>
-      <p>Ingresá tu DNI para ver y cancelar tus turnos</p>
+      <h2 id="portal-saludo">👋 Hola</h2>
+      <p>Tus turnos en este negocio</p>
     </div>
-    <div class="form-group">
-      <label>DNI *</label>
-      <input type="text" id="cancel-dni" placeholder="12345678" inputmode="numeric" maxlength="10" />
-    </div>
-    <div id="cancel-msg" style="display:none" class="alert"></div>
-    <button class="btn btn-primary" onclick="buscarMisTurnos()">Buscar mis turnos</button>
-    <div id="cancel-lista" style="margin-top:14px"></div>
-    <button class="btn btn-secondary" onclick="goStep(1)">← Volver</button>
+    <div id="portal-lista"></div>
+    <button class="btn btn-primary" style="margin-top:10px" onclick="irANuevoTurno()">+ Agregar turno</button>
+    <button class="btn btn-secondary" onclick="reiniciar()">← Volver</button>
   </div>
 
   <!-- STEP 2: DATOS -->
@@ -175,6 +169,7 @@
 const slug = location.pathname.replace('/reservar/', '').replace(/\//g,'').split('?')[0];
 let negocio = null, esMulti = false;
 let clienteExistente = null;
+let historialCliente = [], ultimoProfesionalId = null, ultimoServicioId = null;
 let profSeleccionado = null, srvSeleccionado = null, horaSeleccionada = null;
 let currentStep = 1;
 const TOTAL_STEPS = 6;
@@ -224,44 +219,58 @@ function showStep(n) {
   window.scrollTo(0, 0);
 }
 
-function mostrarCancelar() {
+function mostrarPortal() {
   document.querySelectorAll('.step').forEach(s => { s.classList.remove('active'); s.style.display=''; });
-  document.getElementById('step-cancelar').classList.add('active');
-  document.getElementById('step-cancelar').style.display = 'block';
-  document.getElementById('cancel-lista').innerHTML = '';
+  document.getElementById('step-portal').classList.add('active');
+  document.getElementById('step-portal').style.display = 'block';
+  document.getElementById('portal-saludo').textContent = '👋 Hola, ' + clienteExistente.nombre;
+  renderPortal();
   window.scrollTo(0, 0);
 }
 
-async function buscarMisTurnos() {
-  const dni = document.getElementById('cancel-dni').value.trim();
-  const msgEl = document.getElementById('cancel-msg');
-  const listaEl = document.getElementById('cancel-lista');
-  msgEl.style.display = 'none'; listaEl.innerHTML = '';
-  if (!dni) { msgEl.style.display='block'; msgEl.className='alert alert-error'; msgEl.textContent='Ingresá tu DNI'; return; }
+async function renderPortal() {
+  const c = document.getElementById('portal-lista');
+  c.innerHTML = '<p class="loading">Cargando turnos...</p>';
   try {
-    const turnos = await api('/mis-turnos/' + slug + '/' + dni);
-    if (!turnos.length) { listaEl.innerHTML = '<p style="color:var(--muted);font-size:.85rem;text-align:center">No tenés turnos próximos con este DNI.</p>'; return; }
-    listaEl.innerHTML = turnos.map(t => `
+    historialCliente = await api('/historial/' + slug + '/' + clienteExistente.dni);
+    if (historialCliente.length) {
+      ultimoProfesionalId = historialCliente[0].profesional_id || null;
+      ultimoServicioId = historialCliente[0].servicio_id || null;
+    }
+    if (!historialCliente.length) { c.innerHTML = '<p class="text-muted">Todavía no tenés turnos registrados.</p>'; return; }
+    const hoy = new Date().toISOString().split('T')[0];
+    c.innerHTML = historialCliente.map(t => {
+      const pasado = t.fecha < hoy;
+      const colorEstado = t.estado === 'cancelado' ? 'var(--red)' : (pasado ? 'var(--muted)' : 'var(--green)');
+      return `
       <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
         <div style="font-weight:600">${t.fecha} - ${t.hora}</div>
         <div style="font-size:.85rem;color:var(--muted)">${t.servicio_nombre||'Servicio'}${t.profesional_nombre ? ' · '+t.profesional_nombre : ''}</div>
-        <div style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Estado: ${t.estado}</div>
-        <button class="btn btn-secondary" style="background:var(--red);color:#fff;margin-top:0" onclick="cancelarMiTurno(${t.id},'${dni.replace(/'/g,"\\'")}')">Cancelar este turno</button>
-      </div>
-    `).join('');
+        <div style="font-size:.8rem;color:${colorEstado};margin-bottom:${t.puede_cancelar?'8px':'0'}">Estado: ${t.estado}</div>
+        ${t.puede_cancelar ? `<button class="btn btn-secondary" style="background:var(--red);color:#fff;margin-top:0" onclick="cancelarMiTurno(${t.id})">Cancelar este turno</button>` : ''}
+      </div>`;
+    }).join('');
   } catch (e) {
-    msgEl.style.display='block'; msgEl.className='alert alert-error'; msgEl.textContent = e.message || 'No pudimos buscar tus turnos';
+    c.innerHTML = `<p class="text-muted">No pudimos cargar tus turnos: ${e.message}</p>`;
   }
 }
 
-async function cancelarMiTurno(turnoId, dni) {
-  if (!confirm('¿Seguro que querés cancelar este turno?')) return;
+async function cancelarMiTurno(turnoId) {
+  if (!confirm('¿Seguro que querés cancelar este turno? (solo se puede cancelar con 1 día de anticipación)')) return;
   try {
-    await api('/cancelar/' + slug, 'POST', { turno_id: turnoId, dni });
-    buscarMisTurnos();
+    await api('/cancelar/' + slug, 'POST', { turno_id: turnoId, dni: clienteExistente.dni });
+    renderPortal();
   } catch (e) {
     alert(e.message || 'No pudimos cancelar el turno');
   }
+}
+
+function irANuevoTurno() {
+  document.getElementById('input-nombre').value = clienteExistente.nombre;
+  document.getElementById('input-apellido').value = clienteExistente.apellido;
+  document.getElementById('input-tel').value = clienteExistente.telefono;
+  document.getElementById('input-email').value = clienteExistente.email || '';
+  goStep(2);
 }
 
 async function buscarDni() {
@@ -273,10 +282,9 @@ async function buscarDni() {
     document.getElementById('input-apellido').value = clienteExistente.apellido;
     document.getElementById('input-tel').value = clienteExistente.telefono;
     document.getElementById('input-email').value = clienteExistente.email || '';
-    showMsg('step1', '✅ Cliente encontrado. Confirmá tus datos.', 'success');
-    setTimeout(() => goStep(2), 800);
+    mostrarPortal();
   } catch {
-    clienteExistente = null;
+    clienteExistente = { dni };
     document.getElementById('input-nombre').value = '';
     document.getElementById('input-apellido').value = '';
     document.getElementById('input-tel').value = '549';
@@ -300,11 +308,15 @@ async function loadProfesionales() {
     const c = document.getElementById('lista-profesionales');
     if (!profs.length) { c.innerHTML = '<p class="text-muted">No hay profesionales disponibles.</p>'; return; }
     c.innerHTML = profs.map(p => `
-      <div class="prof-card" onclick="seleccionarProf(${p.id},'${p.nombre.replace(/'/g,"\\'")}','${(p.especialidad||'').replace(/'/g,"\\'")}')">
-        <h3>${p.nombre}</h3>
+      <div class="prof-card${p.id===ultimoProfesionalId?' selected':''}" onclick="seleccionarProf(${p.id},'${p.nombre.replace(/'/g,"\\'")}','${(p.especialidad||'').replace(/'/g,"\\'")}')">
+        <h3>${p.nombre}${p.id===ultimoProfesionalId?' <span style="color:var(--accent);font-size:.75rem">(anterior)</span>':''}</h3>
         <p>${p.especialidad || ''}${p.descripcion ? ' · '+p.descripcion : ''}</p>
       </div>
     `).join('');
+    if (ultimoProfesionalId && profs.some(p => p.id === ultimoProfesionalId) && !profSeleccionado) {
+      const p = profs.find(p => p.id === ultimoProfesionalId);
+      profSeleccionado = { id: p.id, nombre: p.nombre, especialidad: p.especialidad };
+    }
   } catch(e) { document.getElementById('lista-profesionales').innerHTML = '<p class="text-muted">Error cargando profesionales.</p>'; }
 }
 
@@ -323,11 +335,15 @@ async function loadServicios(profId) {
     const c = document.getElementById('lista-servicios');
     if (!srvs.length) { c.innerHTML = '<p class="text-muted">No hay servicios disponibles.</p>'; return; }
     c.innerHTML = srvs.map(s => `
-      <div class="srv-card" onclick="seleccionarSrv(${s.id},'${s.nombre.replace(/'/g,"\\'")}',${s.duracion_minutos},${s.precio})">
-        <span class="srv-name">${s.nombre}</span>
+      <div class="srv-card${s.id===ultimoServicioId?' selected':''}" onclick="seleccionarSrv(${s.id},'${s.nombre.replace(/'/g,"\\'")}',${s.duracion_minutos},${s.precio})">
+        <span class="srv-name">${s.nombre}${s.id===ultimoServicioId?' <span style="color:var(--accent);font-size:.75rem">(anterior)</span>':''}</span>
         <span class="srv-info">${s.duracion_minutos}min${s.precio>0?' · $'+s.precio:''}</span>
       </div>
     `).join('');
+    if (ultimoServicioId && srvs.some(s => s.id === ultimoServicioId) && !srvSeleccionado) {
+      const s = srvs.find(s => s.id === ultimoServicioId);
+      srvSeleccionado = { id: s.id, nombre: s.nombre, duracion: s.duracion_minutos, precio: s.precio };
+    }
   } catch { document.getElementById('lista-servicios').innerHTML = '<p class="text-muted">Error cargando servicios.</p>'; }
 }
 
@@ -426,6 +442,7 @@ async function confirmarTurno() {
 
 function reiniciar() {
   profSeleccionado = null; srvSeleccionado = null; horaSeleccionada = null; clienteExistente = null;
+  historialCliente = []; ultimoProfesionalId = null; ultimoServicioId = null;
   document.getElementById('input-dni').value = '';
   document.getElementById('input-nombre').value = '';
   document.getElementById('input-apellido').value = '';

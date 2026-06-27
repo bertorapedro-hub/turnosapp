@@ -21,18 +21,22 @@ router.get('/cliente/:slug/:dni', (req, res) => {
 });
 
 // Turnos futuros de un cliente (para que pueda cancelarlos desde la web, identificándose con su DNI)
-router.get('/mis-turnos/:slug/:dni', (req, res) => {
+// Historial completo de turnos de un cliente (pasados, futuros y cancelados), para el portal de cliente
+router.get('/historial/:slug/:dni', (req, res) => {
   const n = db.prepare("SELECT id FROM negocios WHERE slug=?").get(req.params.slug);
   if (!n) return res.status(404).json({ error: 'Negocio no encontrado' });
   const turnos = db.prepare(`
-    SELECT t.id, t.fecha, t.hora, t.estado, s.nombre as servicio_nombre, p.nombre as profesional_nombre
+    SELECT t.id, t.fecha, t.hora, t.estado, t.profesional_id, t.servicio_id,
+           s.nombre as servicio_nombre, p.nombre as profesional_nombre
     FROM turnos t
     LEFT JOIN servicios s ON s.id = t.servicio_id
     LEFT JOIN profesionales p ON p.id = t.profesional_id
-    WHERE t.negocio_id=? AND t.cliente_dni=? AND t.estado!='cancelado' AND t.fecha >= date('now')
-    ORDER BY t.fecha ASC, t.hora ASC
+    WHERE t.negocio_id=? AND t.cliente_dni=?
+    ORDER BY t.fecha DESC, t.hora DESC
   `).all(n.id, req.params.dni);
-  res.json(turnos);
+  const mañana = new Date(); mañana.setDate(mañana.getDate() + 1);
+  const limite = mañana.toISOString().split('T')[0];
+  res.json(turnos.map(t => ({ ...t, puede_cancelar: t.estado !== 'cancelado' && t.fecha >= limite })));
 });
 
 // Cancelar un turno propio desde la web (se identifica con el DNI con el que reservó)
@@ -45,6 +49,9 @@ router.post('/cancelar/:slug', async (req, res) => {
   if (!t) return res.status(404).json({ error: 'Turno no encontrado' });
   if (t.cliente_dni !== dni) return res.status(403).json({ error: 'Ese turno no corresponde a este DNI' });
   if (t.estado === 'cancelado') return res.status(400).json({ error: 'Ese turno ya estaba cancelado' });
+  const mañana = new Date(); mañana.setDate(mañana.getDate() + 1);
+  const limite = mañana.toISOString().split('T')[0];
+  if (t.fecha < limite) return res.status(400).json({ error: 'Ya no se puede cancelar: falta menos de 1 día para el turno. Contactanos directamente.' });
 
   db.prepare("UPDATE turnos SET estado='cancelado', cancelado_por='cliente' WHERE id=?").run(t.id);
 
