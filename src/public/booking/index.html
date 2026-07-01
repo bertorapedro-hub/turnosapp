@@ -54,6 +54,20 @@
   .loading{text-align:center;padding:20px;color:var(--muted)}
   .text-muted{color:var(--muted);font-size:.8rem}
   @media(max-width:400px){.slot-grid{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:480px){
+    body{padding:8px;align-items:flex-start}
+    .container{max-width:100%}
+    .header{margin-bottom:18px;padding-top:6px}
+    .header h1{font-size:1.3rem}
+    .header p{font-size:.8rem}
+    .card{padding:16px;border-radius:12px}
+    .step-header h2{font-size:1rem}
+    input,select{font-size:1rem;padding:12px 14px}
+    .btn{padding:13px;font-size:.9rem}
+    .prof-card,.srv-card{padding:12px}
+    .slot-grid{gap:6px}
+    .slot{padding:9px 4px;font-size:.8rem}
+  }
 </style>
 </head>
 <body>
@@ -219,6 +233,8 @@ function showStep(n) {
   window.scrollTo(0, 0);
 }
 
+function goStep(n) { showStep(n); }
+
 function mostrarPortal() {
   document.querySelectorAll('.step').forEach(s => { s.classList.remove('active'); s.style.display=''; });
   document.getElementById('step-portal').classList.add('active');
@@ -367,6 +383,7 @@ async function loadSlots() {
   try {
     let url = `/horarios/${slug}?fecha=${fecha}`;
     if (profSeleccionado?.id) url += `&profesional_id=${profSeleccionado.id}`;
+    if (srvSeleccionado?.id) url += `&servicio_id=${srvSeleccionado.id}`;
     const slots = await api(url);
     if (!slots.length) { c.innerHTML = '<p class="text-muted" style="margin-top:8px">No hay horarios disponibles para este día.</p>'; return; }
     c.innerHTML = `<div class="slot-grid">${slots.map(s => `<div class="slot" onclick="selSlot('${s}',this)">${s}</div>`).join('')}</div>`;

@@ -1,5 +1,15 @@
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const JWT_SECRET = process.env.JWT_SECRET || 'turnosapp_secret_2024';
+
+// Limita intentos de login (fuerza bruta) a 15 intentos cada 15 minutos por IP
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de login. Esperá unos minutos y volvé a intentar.' },
+});
 
 function authSuperadmin(req, res, next) {
   const auth = req.headers.authorization;
@@ -23,4 +33,4 @@ function authAdmin(req, res, next) {
   } catch { res.status(401).json({ error: 'Token inválido' }); }
 }
 
-module.exports = { authSuperadmin, authAdmin, JWT_SECRET };
+module.exports = { authSuperadmin, authAdmin, JWT_SECRET, loginLimiter };

@@ -95,8 +95,14 @@ router.get('/servicios/:slug', (req, res) => {
 router.get('/horarios/:slug', (req, res) => {
   const n = db.prepare("SELECT id FROM negocios WHERE slug=?").get(req.params.slug);
   if (!n) return res.status(404).json({ error: 'Negocio no encontrado' });
-  const { fecha, profesional_id } = req.query;
+  const { fecha, profesional_id, servicio_id } = req.query;
   if (!fecha) return res.status(400).json({ error: 'Fecha requerida' });
+
+  let duracion = 30;
+  if (servicio_id) {
+    const srv = db.prepare('SELECT duracion_minutos FROM servicios WHERE id=? AND negocio_id=?').get(servicio_id, n.id);
+    if (srv?.duracion_minutos) duracion = srv.duracion_minutos;
+  }
 
   const diaSemana = new Date(fecha + 'T00:00:00').getDay(); // 0=dom, 1=lun...
 
@@ -105,24 +111,43 @@ router.get('/horarios/:slug', (req, res) => {
   if (profesional_id) { sqlHor += ' AND profesional_id=?'; paramsHor.push(profesional_id); }
   const horarios = db.prepare(sqlHor).all(...paramsHor);
 
-  // Turnos ya ocupados
-  let sqlTurnos = "SELECT hora FROM turnos WHERE negocio_id=? AND fecha=? AND (estado!='cancelado' OR cancelado_por IN ('profesional','admin'))";
+  // Turnos ya ocupados, con su duración real, para chequear superposición (no solo la hora exacta)
+  let sqlTurnos = `SELECT t.hora, COALESCE(s.duracion_minutos,30) as duracion
+    FROM turnos t LEFT JOIN servicios s ON s.id = t.servicio_id
+    WHERE t.negocio_id=? AND t.fecha=? AND (t.estado!='cancelado' OR t.cancelado_por IN ('profesional','admin'))`;
   const paramsTurnos = [n.id, fecha];
-  if (profesional_id) { sqlTurnos += ' AND profesional_id=?'; paramsTurnos.push(profesional_id); }
-  const ocupados = db.prepare(sqlTurnos).all(...paramsTurnos).map(t => t.hora);
+  if (profesional_id) { sqlTurnos += ' AND t.profesional_id=?'; paramsTurnos.push(profesional_id); }
+  const ocupados = db.prepare(sqlTurnos).all(...paramsTurnos).map(t => {
+    const [hh, mm] = t.hora.split(':').map(Number);
+    const inicio = hh * 60 + mm;
+    return { inicio, fin: inicio + t.duracion };
+  });
 
-  // Generar slots
-  const slots = [];
+  // Bloqueos del profesional (o de todo el negocio) que caigan en este día
+  let sqlBloq = 'SELECT hora_inicio, hora_fin FROM bloqueos WHERE negocio_id=? AND ? BETWEEN fecha_inicio AND fecha_fin AND (profesional_id IS NULL';
+  const paramsBloq = [n.id, fecha];
+  if (profesional_id) { sqlBloq += ' OR profesional_id=?'; paramsBloq.push(profesional_id); }
+  sqlBloq += ')';
+  const bloqueos = db.prepare(sqlBloq).all(...paramsBloq).map(b => {
+    const [ih, im] = (b.hora_inicio || '00:00').split(':').map(Number);
+    const [fh, fm] = (b.hora_fin || '23:59').split(':').map(Number);
+    return { inicio: ih * 60 + im, fin: fh * 60 + fm };
+  });
+
+  const PASO = 15; // granularidad de los horarios sugeridos
+  const slots = new Set();
   for (const h of horarios) {
-    let [hh, mm] = h.hora_inicio.split(':').map(Number);
-    const [hfin, mfin] = h.hora_fin.split(':').map(Number);
-    while (hh * 60 + mm < hfin * 60 + mfin) {
-      const slot = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
-      if (!ocupados.includes(slot)) slots.push(slot);
-      mm += 30; if (mm >= 60) { hh++; mm -= 60; }
+    const [hih, him] = h.hora_inicio.split(':').map(Number);
+    const [hfh, hfm] = h.hora_fin.split(':').map(Number);
+    const inicioVentana = hih * 60 + him, finVentana = hfh * 60 + hfm;
+    for (let t = inicioVentana; t + duracion <= finVentana; t += PASO) {
+      const finSlot = t + duracion;
+      const chocaTurno = ocupados.some(o => t < o.fin && finSlot > o.inicio);
+      const chocaBloqueo = bloqueos.some(b => t < b.fin && finSlot > b.inicio);
+      if (!chocaTurno && !chocaBloqueo) slots.add(`${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`);
     }
   }
-  res.json(slots.sort());
+  res.json([...slots].sort());
 });
 
 // Crear turno (reserva pública)
@@ -134,12 +159,37 @@ router.post('/turno/:slug', async (req, res) => {
   if (!cliente_nombre || !cliente_telefono || !fecha || !hora)
     return res.status(400).json({ error: 'Faltan datos obligatorios' });
 
-  // Verificar disponibilidad
-  let sqlOcupado = "SELECT id FROM turnos WHERE negocio_id=? AND fecha=? AND hora=? AND (estado!='cancelado' OR cancelado_por IN ('profesional','admin'))";
-  const paramsOcupado = [n.id, fecha, hora];
-  if (profesional_id) { sqlOcupado += ' AND profesional_id=?'; paramsOcupado.push(profesional_id); }
-  const ocupado = db.prepare(sqlOcupado).get(...paramsOcupado);
-  if (ocupado) return res.status(409).json({ error: 'Ese horario ya está ocupado' });
+  // Verificar disponibilidad (chocando por superposición de horario, no solo la hora exacta)
+  let duracion = 30;
+  if (servicio_id) {
+    const srv = db.prepare('SELECT duracion_minutos FROM servicios WHERE id=? AND negocio_id=?').get(servicio_id, n.id);
+    if (srv?.duracion_minutos) duracion = srv.duracion_minutos;
+  }
+  const [hh, mm] = hora.split(':').map(Number);
+  const inicioNuevo = hh * 60 + mm, finNuevo = inicioNuevo + duracion;
+
+  let sqlTurnosDia = `SELECT t.hora, COALESCE(s.duracion_minutos,30) as duracion
+    FROM turnos t LEFT JOIN servicios s ON s.id = t.servicio_id
+    WHERE t.negocio_id=? AND t.fecha=? AND (t.estado!='cancelado' OR t.cancelado_por IN ('profesional','admin'))`;
+  const paramsTurnosDia = [n.id, fecha];
+  if (profesional_id) { sqlTurnosDia += ' AND t.profesional_id=?'; paramsTurnosDia.push(profesional_id); }
+  const chocaTurno = db.prepare(sqlTurnosDia).all(...paramsTurnosDia).some(t => {
+    const [oh, om] = t.hora.split(':').map(Number);
+    const oInicio = oh * 60 + om, oFin = oInicio + t.duracion;
+    return inicioNuevo < oFin && finNuevo > oInicio;
+  });
+  if (chocaTurno) return res.status(409).json({ error: 'Ese horario ya está ocupado' });
+
+  let sqlBloq = 'SELECT hora_inicio, hora_fin FROM bloqueos WHERE negocio_id=? AND ? BETWEEN fecha_inicio AND fecha_fin AND (profesional_id IS NULL';
+  const paramsBloq = [n.id, fecha];
+  if (profesional_id) { sqlBloq += ' OR profesional_id=?'; paramsBloq.push(profesional_id); }
+  sqlBloq += ')';
+  const chocaBloqueo = db.prepare(sqlBloq).all(...paramsBloq).some(b => {
+    const [ih, im] = (b.hora_inicio || '00:00').split(':').map(Number);
+    const [fh, fm] = (b.hora_fin || '23:59').split(':').map(Number);
+    return inicioNuevo < (fh * 60 + fm) && finNuevo > (ih * 60 + im);
+  });
+  if (chocaBloqueo) return res.status(409).json({ error: 'Ese horario no está disponible' });
 
   // Guardar/actualizar cliente
   let clienteId = null;

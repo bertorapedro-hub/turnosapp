@@ -1,16 +1,16 @@
 const express = require('express');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
 const { db } = require('../models/database');
-const { authAdmin } = require('../middleware/auth');
+const { authAdmin, JWT_SECRET, loginLimiter } = require('../middleware/auth');
 const { conectarWhatsApp, getEstado, getQR, desconectar, enviarMensaje, onNuevoQR, registrarEsperaRespuesta } = require('../services/whatsapp');
+const { reemplazarVariables } = require('../services/scheduler');
 
 // ============ Login ============
-router.post('/login', (req, res) => {
+router.post('/login', loginLimiter, (req, res) => {
   const { token } = req.body;
   const negocio = db.prepare("SELECT * FROM negocios WHERE token=? AND estado='activo'").get(token);
   if (!negocio) return res.status(401).json({ error: 'Token inválido o negocio inactivo' });
-  const jwt = require('jsonwebtoken');
-  const { JWT_SECRET } = require('../middleware/auth');
   const jwtToken = jwt.sign({ negocio_id: negocio.id, role: 'admin' }, JWT_SECRET);
   res.json({ token: jwtToken, negocio: { id: negocio.id, nombre: negocio.nombre, slug: negocio.slug, tipo: negocio.tipo } });
 });
@@ -64,6 +64,26 @@ router.post('/turnos', authAdmin, async (req, res) => {
   const { profesional_id, servicio_id, cliente_nombre, cliente_telefono, cliente_email, cliente_dni, fecha, hora, notas } = req.body;
   if (!cliente_nombre || !fecha || !hora) return res.status(400).json({ error: 'Faltan campos requeridos' });
 
+  // Verificar que el horario no esté ya ocupado para este profesional (chocando por superposición real, no solo la hora exacta)
+  let duracion = 30;
+  if (servicio_id) {
+    const srv = db.prepare('SELECT duracion_minutos FROM servicios WHERE id=? AND negocio_id=?').get(servicio_id, req.negocioId);
+    if (srv?.duracion_minutos) duracion = srv.duracion_minutos;
+  }
+  const [hhNuevo, mmNuevo] = hora.split(':').map(Number);
+  const inicioNuevo = hhNuevo * 60 + mmNuevo, finNuevo = inicioNuevo + duracion;
+  let sqlTurnosDia = `SELECT t.hora, COALESCE(s.duracion_minutos,30) as duracion
+    FROM turnos t LEFT JOIN servicios s ON s.id = t.servicio_id
+    WHERE t.negocio_id=? AND t.fecha=? AND (t.estado!='cancelado' OR t.cancelado_por IN ('profesional','admin'))`;
+  const paramsTurnosDia = [req.negocioId, fecha];
+  if (profesional_id) { sqlTurnosDia += ' AND t.profesional_id=?'; paramsTurnosDia.push(profesional_id); }
+  const choca = db.prepare(sqlTurnosDia).all(...paramsTurnosDia).some(t => {
+    const [oh, om] = t.hora.split(':').map(Number);
+    const oInicio = oh * 60 + om, oFin = oInicio + t.duracion;
+    return inicioNuevo < oFin && finNuevo > oInicio;
+  });
+  if (choca) return res.status(409).json({ error: 'Ese horario ya está ocupado para este profesional' });
+
   let clienteId = null;
   if (cliente_dni) {
     const cli = db.prepare('SELECT id FROM clientes WHERE negocio_id=? AND dni=?').get(req.negocioId, cliente_dni);
@@ -88,7 +108,6 @@ router.post('/turnos', authAdmin, async (req, res) => {
       const negocio = db.prepare('SELECT nombre, slug FROM negocios WHERE id=?').get(req.negocioId);
       const servicio = servicio_id ? db.prepare('SELECT nombre FROM servicios WHERE id=?').get(servicio_id) : null;
       const prof = profesional_id ? db.prepare('SELECT nombre FROM profesionales WHERE id=?').get(profesional_id) : null;
-      const { reemplazarVariables } = require('../services/scheduler');
       const msg = reemplazarVariables(msgConf.mensaje, {
         nombre: cliente_nombre, fecha, hora, servicio: servicio?.nombre || '', profesional: prof?.nombre || '', negocio: negocio?.nombre || '',
         link_reservas: (process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`) + '/reservar/' + (negocio?.slug || '')
@@ -108,7 +127,6 @@ router.post('/turnos', authAdmin, async (req, res) => {
       if (msgAviso) {
         const negocio = db.prepare('SELECT nombre FROM negocios WHERE id=?').get(req.negocioId);
         const servicio = servicio_id ? db.prepare('SELECT nombre FROM servicios WHERE id=?').get(servicio_id) : null;
-        const { reemplazarVariables } = require('../services/scheduler');
         const msgProf = reemplazarVariables(msgAviso.mensaje, { nombre: cliente_nombre, fecha, hora, servicio: servicio?.nombre || '', profesional: prof.nombre, negocio: negocio?.nombre || '' });
         await enviarMensaje(req.negocioId, prof.telefono, msgProf).catch(() => {});
         registrarEsperaRespuesta(prof.telefono, req.negocioId, result.lastInsertRowid, 'profesional');
@@ -132,7 +150,6 @@ router.put('/turnos/:id', authAdmin, async (req, res) => {
     const negocio = db.prepare('SELECT nombre FROM negocios WHERE id=?').get(req.negocioId);
     const servicio = t.servicio_id ? db.prepare('SELECT nombre FROM servicios WHERE id=?').get(t.servicio_id) : null;
     const prof = t.profesional_id ? db.prepare('SELECT nombre, telefono FROM profesionales WHERE id=?').get(t.profesional_id) : null;
-    const { reemplazarVariables } = require('../services/scheduler');
     if (t.cliente_telefono) {
       const msgCanc = db.prepare("SELECT * FROM mensajes_config WHERE negocio_id=? AND tipo='cancelacion' AND activo=1").get(req.negocioId);
       if (msgCanc) {
@@ -240,6 +257,27 @@ router.post('/horarios', authAdmin, (req, res) => {
 });
 router.delete('/horarios/:id', authAdmin, (req, res) => {
   db.prepare('DELETE FROM horarios WHERE id=? AND negocio_id=?').run(req.params.id, req.negocioId);
+  res.json({ ok: true });
+});
+
+// ============ Bloqueos de disponibilidad ("esta semana no voy", "este día no", "estas horas no") ============
+router.get('/bloqueos', authAdmin, (req, res) => {
+  const { profesional_id } = req.query;
+  let sql = 'SELECT * FROM bloqueos WHERE negocio_id=?';
+  const params = [req.negocioId];
+  if (profesional_id) { sql += ' AND profesional_id=?'; params.push(profesional_id); }
+  sql += ' ORDER BY fecha_inicio DESC';
+  res.json(db.prepare(sql).all(...params));
+});
+router.post('/bloqueos', authAdmin, (req, res) => {
+  const { profesional_id, fecha_inicio, fecha_fin, hora_inicio, hora_fin, motivo } = req.body;
+  if (!fecha_inicio) return res.status(400).json({ error: 'Falta la fecha' });
+  const r = db.prepare('INSERT INTO bloqueos (negocio_id, profesional_id, fecha_inicio, fecha_fin, hora_inicio, hora_fin, motivo) VALUES (?,?,?,?,?,?,?)')
+    .run(req.negocioId, profesional_id || null, fecha_inicio, fecha_fin || fecha_inicio, hora_inicio || null, hora_fin || null, motivo || null);
+  res.json({ id: r.lastInsertRowid });
+});
+router.delete('/bloqueos/:id', authAdmin, (req, res) => {
+  db.prepare('DELETE FROM bloqueos WHERE id=? AND negocio_id=?').run(req.params.id, req.negocioId);
   res.json({ ok: true });
 });
 
@@ -362,17 +400,11 @@ router.get('/whatsapp/estado', authAdmin, (req, res) => {
   res.json(getEstado(req.negocioId));
 });
 
-router.get('/whatsapp/qr', authAdmin, (req, res) => {
-  const qr = getQR(req.negocioId);
-  if (!qr) return res.status(404).json({ error: 'Sin QR disponible' });
-  res.json({ qr });
-});
+// (el polling de QR fue reemplazado por /whatsapp/qr-stream vía SSE, más abajo)
 
 // SSE: el cliente escucha actualizaciones del QR en tiempo real
 // El token viene por query param porque EventSource no soporta headers custom
 router.get('/whatsapp/qr-stream', (req, res) => {
-  const jwt = require('jsonwebtoken');
-  const { JWT_SECRET } = require('../middleware/auth');
   let negocioId;
   try {
     const decoded = jwt.verify(req.query.token, JWT_SECRET);

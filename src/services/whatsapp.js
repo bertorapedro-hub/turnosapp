@@ -13,6 +13,9 @@ const ultimosErrores = new Map();
 const qrCallbacksMap = new Map();
 // Map de teléfono (solo dígitos) -> { negocioId, turnoId, rol, ts } — para saber a qué turno corresponde un "Confirmar"/"Cancelar"
 const esperandoRespuesta = new Map();
+// Map de negocioId -> cantidad de intentos de reconexión fallidos seguidos
+const intentosReconexion = new Map();
+const MAX_INTENTOS_RECONEXION = 5;
 
 // Avisa al servicio que un teléfono puede responder "Confirmar"/"Cancelar" para el turno indicado.
 // rol: 'cliente' o 'profesional', según a quién le mandamos el mensaje.
@@ -141,6 +144,7 @@ async function conectarWhatsApp(negocioId) {
       }
 
       if (connection === 'open') {
+        intentosReconexion.set(negocioId, 0);
         const phone = sock.user?.id?.split(':')[0] || '';
         sesiones.set(negocioId, { socket: sock, estado: 'open', telefono: phone, negocioId });
         ultimosQR.set(negocioId, null);
@@ -168,11 +172,20 @@ async function conectarWhatsApp(negocioId) {
         }
 
         if (code !== DisconnectReason.loggedOut) {
-          ultimosErrores.set(negocioId, motivo);
-          console.log(`🔄 [${negocioId}] Reconectando en 5s... motivo:`, motivo);
-          setTimeout(() => conectarWhatsApp(negocioId), 5000);
+          const intentos = (intentosReconexion.get(negocioId) || 0) + 1;
+          intentosReconexion.set(negocioId, intentos);
+          if (intentos > MAX_INTENTOS_RECONEXION) {
+            console.log(`⛔ [${negocioId}] Se alcanzó el máximo de reintentos (${MAX_INTENTOS_RECONEXION}). Dejo de reconectar automáticamente.`);
+            ultimosErrores.set(negocioId, 'Se perdió la conexión varias veces seguidas. Volvé a vincular el WhatsApp desde el panel (Desconectar y escanear el QR de nuevo).');
+            sesiones.delete(negocioId);
+          } else {
+            ultimosErrores.set(negocioId, motivo);
+            console.log(`🔄 [${negocioId}] Reconectando en 5s... motivo:`, motivo, `(intento ${intentos}/${MAX_INTENTOS_RECONEXION})`);
+            setTimeout(() => conectarWhatsApp(negocioId), 5000);
+          }
         } else {
           // Logout limpio: borrar sesión guardada
+          intentosReconexion.delete(negocioId);
           sesiones.delete(negocioId);
           ultimosQR.delete(negocioId);
           ultimosErrores.delete(negocioId);

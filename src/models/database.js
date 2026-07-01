@@ -96,6 +96,14 @@ async function initDb() {
       dia_semana INTEGER NOT NULL, hora_inicio TEXT NOT NULL,
       hora_fin TEXT NOT NULL, activo INTEGER DEFAULT 1
     );
+    CREATE TABLE IF NOT EXISTS bloqueos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, negocio_id INTEGER NOT NULL,
+      profesional_id INTEGER,
+      fecha_inicio TEXT NOT NULL, fecha_fin TEXT NOT NULL,
+      hora_inicio TEXT, hora_fin TEXT,
+      motivo TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE TABLE IF NOT EXISTS clientes (
       id INTEGER PRIMARY KEY AUTOINCREMENT, negocio_id INTEGER NOT NULL,
       dni TEXT NOT NULL, nombre TEXT NOT NULL, apellido TEXT NOT NULL,
@@ -194,6 +202,16 @@ async function initDb() {
   for (const n of negociosSinAviso) {
     db.prepare("INSERT INTO mensajes_config (negocio_id, tipo, activo, mensaje, hora_envio, dias_antes) VALUES (?, 'aviso_profesional', 1, ?, '09:00', 0)")
       .run(n.id, AVISO_PROF_DEFAULT);
+  }
+
+  // Mensaje de cancelación: este es un bug viejo (nunca se creaba) — completamos el que falte sin tocar los que ya existen
+  const negociosSinCancelacion = db.prepare(
+    "SELECT id FROM negocios WHERE id NOT IN (SELECT negocio_id FROM mensajes_config WHERE tipo='cancelacion')"
+  ).all();
+  const CANCELACION_DEFAULT = '❌ Hola *{{nombre}}*, tu turno del *{{fecha}}* a las *{{hora}}* fue cancelado. Si querés reservar otro, entrá acá: {{link_reservas}}';
+  for (const n of negociosSinCancelacion) {
+    db.prepare("INSERT INTO mensajes_config (negocio_id, tipo, activo, mensaje, hora_envio, dias_antes) VALUES (?, 'cancelacion', 1, ?, '09:00', 0)")
+      .run(n.id, CANCELACION_DEFAULT);
   }
 
   // Actualizar el texto por defecto en negocios que todavía no lo personalizaron (no toca mensajes ya editados a mano)

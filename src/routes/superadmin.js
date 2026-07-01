@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { db } = require('../models/database');
-const { authSuperadmin, JWT_SECRET } = require('../middleware/auth');
+const { authSuperadmin, JWT_SECRET, loginLimiter } = require('../middleware/auth');
 
 function calcularFechaVencimiento() {
   const hoy = new Date();
@@ -15,7 +15,7 @@ function calcularFechaVencimiento() {
 }
 
 // ============ Login ============
-router.post('/login', (req, res) => {
+router.post('/login', loginLimiter, (req, res) => {
   const { username, password } = req.body;
   const sa = db.prepare('SELECT * FROM superadmin WHERE username=?').get(username);
   if (!sa || !bcrypt.compareSync(password, sa.password_hash))
@@ -53,6 +53,7 @@ router.post('/negocios', authSuperadmin, async (req, res) => {
     const negocioId = result.lastInsertRowid;
     db.prepare("INSERT INTO mensajes_config (negocio_id, tipo, mensaje, hora_envio, dias_antes) VALUES (?, 'recordatorio', '👋 Hola *{{nombre}}*! Te recordamos tu turno mañana *{{fecha}}* a las *{{hora}}*. ¡Te esperamos! 🗓️', '09:00', 1)").run(negocioId);
     db.prepare("INSERT INTO mensajes_config (negocio_id, tipo, mensaje, hora_envio, dias_antes) VALUES (?, 'confirmacion', '✅ *{{nombre}}*, tu turno quedó registrado para el *{{fecha}}* a las *{{hora}}*.\n\nRespondé *Confirmar* o *Cancelar* para avisarnos.\nSi querés pedir otro turno o cancelar este desde la web, entrá acá: {{link_reservas}}\n\n¡Gracias!', '09:00', 0)").run(negocioId);
+    db.prepare("INSERT INTO mensajes_config (negocio_id, tipo, mensaje, hora_envio, dias_antes) VALUES (?, 'cancelacion', '❌ Hola *{{nombre}}*, tu turno del *{{fecha}}* a las *{{hora}}* fue cancelado. Si querés reservar otro, entrá acá: {{link_reservas}}', '09:00', 0)").run(negocioId);
     db.prepare("INSERT INTO mensajes_config (negocio_id, tipo, mensaje, hora_envio, dias_antes) VALUES (?, 'aviso_profesional', '📅 Hola *{{profesional}}*! Tenés un nuevo turno asignado:\n\n👤 Cliente: {{nombre}}\n🗓️ Fecha: {{fecha}}\n🕐 Hora: {{hora}}\n\nRespondé *Confirmar* o *Cancelar* para avisarnos si podés atenderlo.', '09:00', 0)").run(negocioId);
     res.json({ id: negocioId, token, fecha_vencimiento: fechaVencimiento });
   } catch(e) {

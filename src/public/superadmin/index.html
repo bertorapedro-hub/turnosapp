@@ -33,6 +33,7 @@
   .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:.875rem;margin-bottom:2px;transition:all .2s}
   .nav-item:hover,.nav-item.active{background:rgba(99,102,241,.15);color:var(--text)}
   .nav-item.active{color:var(--accent)}
+  .nav-icon{font-size:1rem}
   .sidebar-footer{padding:12px 8px;border-top:1px solid var(--border)}
   .main{margin-left:220px;flex:1;padding:28px}
   .page{display:none}.page.active{display:block}
@@ -62,6 +63,35 @@
   .text-muted{color:var(--muted);font-size:.8rem}
   .token-cell{display:flex;align-items:center;gap:8px}
   .token-cell code{font-family:monospace;font-size:.78rem;color:var(--muted);background:var(--bg);padding:3px 8px;border-radius:6px;border:1px solid var(--border)}
+
+  /* RESPONSIVE */
+  .show-mobile{display:none}
+  @media(max-width:768px){
+    .hide-mobile{display:none!important}
+    .show-mobile{display:inline}
+    .sidebar{
+      position:fixed; left:0; right:0; bottom:0; top:auto; width:100%; height:auto;
+      flex-direction:row; border-right:none; border-top:1px solid var(--border); z-index:50;
+      padding-bottom:env(safe-area-inset-bottom,0);
+    }
+    .sidebar-logo{display:none}
+    .nav-items{display:flex;flex:1;padding:4px 2px;justify-content:space-around}
+    .nav-item{flex-direction:column;font-size:.62rem;gap:2px;padding:6px 4px;text-align:center;margin-bottom:0;border-radius:6px}
+    .nav-item .nav-label{display:block}
+    .sidebar-footer{padding:4px 2px;border-top:none}
+    .main{margin-left:0;padding:14px;padding-bottom:80px}
+    .page-header{flex-wrap:wrap;gap:8px;margin-bottom:16px}
+    .page-header h1{font-size:1.15rem}
+    .card{padding:14px;border-radius:10px}
+    table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
+    .modal{width:95vw;padding:18px}
+    .login-card{width:92vw;padding:28px 22px}
+  }
+  @media(max-width:380px){
+    .nav-item .nav-label{display:none}
+    .nav-item{padding:10px 6px}
+    .nav-item .nav-icon{font-size:1.25rem}
+  }
 </style>
 </head>
 <body>
@@ -92,12 +122,12 @@
     <small>Superadmin</small>
   </div>
   <div class="nav-items">
-    <div class="nav-item active" data-page="negocios" onclick="showPage('negocios', event)">🏢 Negocios</div>
-    <div class="nav-item" data-page="cuenta" onclick="showPage('cuenta', event)">🔐 Mi Cuenta</div>
-    <div class="nav-item" data-page="backup" onclick="showPage('backup', event)">💾 Backup</div>
+    <div class="nav-item active" data-page="negocios" onclick="showPage('negocios', event)"><span class="nav-icon">🏢</span><span class="nav-label"> Negocios</span></div>
+    <div class="nav-item" data-page="cuenta" onclick="showPage('cuenta', event)"><span class="nav-icon">🔐</span><span class="nav-label"> Mi Cuenta</span></div>
+    <div class="nav-item" data-page="backup" onclick="showPage('backup', event)"><span class="nav-icon">💾</span><span class="nav-label"> Backup</span></div>
   </div>
   <div class="sidebar-footer">
-    <div class="nav-item" onclick="logout()">🚪 Salir</div>
+    <div class="nav-item" onclick="logout()"><span class="nav-icon">🚪</span><span class="nav-label"> Salir</span></div>
   </div>
 </div>
 <div class="main">
@@ -107,7 +137,7 @@
   <div class="page-header"><h1>Negocios</h1><button class="btn btn-primary" onclick="openModalNegocio()">+ Nuevo negocio</button></div>
   <div class="card">
     <table>
-      <thead><tr><th>Nombre</th><th>Slug</th><th>Tipo</th><th>Estado</th><th>Vencimiento</th><th>Token</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Nombre</th><th class="hide-mobile">Slug</th><th>Tipo</th><th>Estado</th><th class="hide-mobile">Vencimiento</th><th class="hide-mobile">Token</th><th>Acciones</th></tr></thead>
       <tbody id="tabla-negocios"></tbody>
     </table>
   </div>
@@ -286,22 +316,22 @@ async function loadNegocios() {
   tbody.innerHTML = negociosCache.map(n => `
     <tr>
       <td><strong>${n.nombre}</strong></td>
-      <td><small>${n.slug}</small></td>
+      <td class="hide-mobile"><small>${n.slug}</small></td>
       <td><span class="badge badge-blue">${n.tipo}</span></td>
       <td>${badgeEstado(n.estado)}</td>
-      <td>${fechaVencimientoHtml(n.fecha_vencimiento)}</td>
-      <td>
+      <td class="hide-mobile">${fechaVencimientoHtml(n.fecha_vencimiento)}</td>
+      <td class="hide-mobile">
         <div class="token-cell">
           <code>${n.token.slice(0,10)}…</code>
           <button class="btn btn-sm btn-secondary" id="copy-${n.id}" onclick="copiarToken(${n.id},'${n.token}')">📋</button>
         </div>
       </td>
       <td>
-        <div class="flex">
+        <div class="flex" style="flex-wrap:wrap">
           ${n.estado === 'activo'
-            ? `<button class="btn btn-sm btn-secondary" onclick="toggleEstado(${n.id},'suspendido','${n.nombre}')">⏸ Desactivar</button>`
-            : `<button class="btn btn-sm btn-success" onclick="toggleEstado(${n.id},'activo','${n.nombre}')">▶ Activar</button>`}
-          <button class="btn btn-sm btn-warning" onclick="renovar(${n.id},'${n.nombre}')">↻ Renovar</button>
+            ? `<button class="btn btn-sm btn-secondary" onclick="toggleEstado(${n.id},'suspendido','${n.nombre}')"><span class="hide-mobile">⏸ Desactivar</span><span class="show-mobile">⏸</span></button>`
+            : `<button class="btn btn-sm btn-success" onclick="toggleEstado(${n.id},'activo','${n.nombre}')"><span class="hide-mobile">▶ Activar</span><span class="show-mobile">▶</span></button>`}
+          <button class="btn btn-sm btn-warning" onclick="renovar(${n.id},'${n.nombre}')"><span class="hide-mobile">↻ Renovar</span><span class="show-mobile">↻</span></button>
           <button class="btn btn-sm btn-danger" onclick="eliminarNegocio(${n.id},'${n.nombre}')">🗑</button>
         </div>
       </td>

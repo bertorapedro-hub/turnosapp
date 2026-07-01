@@ -3,8 +3,6 @@ const router = express.Router();
 const crypto = require('crypto');
 const axios = require('axios');
 const { db } = require('../models/database');
-const { enviarMensaje } = require('../services/whatsapp');
-const { reemplazarVariables } = require('../services/scheduler');
 
 // Webhook de Mercado Pago
 router.post('/mercadopago', async (req, res) => {

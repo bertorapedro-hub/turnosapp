@@ -176,4 +176,4 @@ function iniciarScheduler() {
   console.log('✅ Scheduler iniciado');
 }
 
-module.exports = { iniciarScheduler, procesarAlertasPago, reemplazarVariables };
+module.exports = { iniciarScheduler, procesarAlertasPago, reemplazarVariables, procesarRecordatorios, procesarRecordatoriosHoras };
